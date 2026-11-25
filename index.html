@@ -195,6 +195,10 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
 .stat div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
 .stat b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
 .stat span{font-size:12px;color:var(--muted)}
+.summary{font-size:14px;line-height:1.55;white-space:pre-wrap}
+.coverpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
+.coverpick button{border:2px solid transparent;padding:0;background:none;border-radius:6px;cursor:pointer}
+.coverpick button:focus-visible,.coverpick button:hover{border-color:var(--accent)}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;border-radius:10px;background:var(--bad-soft);color:var(--bad)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -212,6 +216,7 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
 <div id="layer"></div>
 <input type="file" id="fileBarcode" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileShelf" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileCover" accept="image/*" capture="environment" hidden>
 <input type="file" id="fileImport" accept="application/json,.json" hidden>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -231,6 +236,27 @@ function hashColor(s){ let h = 0; for (const c of String(s)) h = (h * 31 + c.cha
   const hues = [158, 200, 12, 32, 260, 340, 120, 220, 45, 185]; const hue = hues[Math.abs(h) % hues.length];
   return `hsl(${hue} ${30 + Math.abs(h >> 4) % 25}% ${28 + Math.abs(h >> 8) % 14}%)`; }
 const STATUS = {alire:"À lire", encours:"En cours", lu:"Lu", abandon:"Abandonné"};
+const TYPES = ["BD","Manga","Comics","Roman","Policier / Thriller","SF / Fantasy","Jeunesse","Essai","Documentaire","Biographie","Poésie","Théâtre","Pratique","Beau livre","Autre"];
+function guessType(m){
+  const cat = norm([...(m.categories || []), ...(m.subjects || []).slice(0, 20)].join(" ")), pub = norm(m.publisher);
+  if (/\b(kana|pika|ki oon|kurokawa|kaze|tonkam|akata|doki doki|delcourt tonkam|glenat manga|nobi nobi|meian)\b/.test(pub) || /\bmanga/.test(cat)) return "Manga";
+  if (/\b(urban comics|panini|marvel|dc comics)\b/.test(pub) || /\b(superhero|comic books strips)\b/.test(cat)) return "Comics";
+  if (/\b(dargaud|dupuis|casterman|delcourt|lombard|soleil|bamboo|futuropolis|fluide glacial|vents d ouest|humanoides|albert rene|rue de sevres|glenat|marsu|grand angle|blake mortimer|editions jacobs)\b/.test(pub) || /\b(comics graphic novels|bandes dessinees|bande dessinee|graphic novel|comic)/.test(cat)) return "BD";
+  if (/\b(juvenile|jeunesse|children)/.test(cat)) return "Jeunesse";
+  if (/\b(biograph|autobiograph|memoir)/.test(cat)) return "Biographie";
+  if (/\b(poetry|poesie|poems)/.test(cat)) return "Poésie";
+  if (/\b(drama|theatre)\b/.test(cat)) return "Théâtre";
+  if (/\b(cooking|cuisine|crafts|gardening|health fitness|self help|house home|travel|sports recreation)/.test(cat)) return "Pratique";
+  if (/\b(science fiction|fantasy)/.test(cat)) return "SF / Fantasy";
+  if (/\b(mystery|thriller|detective|crime|policier)/.test(cat)) return "Policier / Thriller";
+  if (/\b(fiction|roman|novel)/.test(cat)) return "Roman";
+  if (/\b(history|histoire|science|philosoph|political|social science|economics|psychology|religion)/.test(cat)) return "Essai";
+  return "";
+}
+function isbn13to10(i){ const b = i.slice(3, 12); let s = 0; for (let k = 0; k < 9; k++) s += +b[k] * (10 - k); const c = (11 - s % 11) % 11; return b + (c === 10 ? "X" : c); }
+const textOf = html => new DOMParser().parseFromString(String(html || ""), "text/html").body.textContent.trim();
+const olDesc = w => { const d = typeof w.description === "string" ? w.description : (w.description && w.description.value) || "";
+  return d.split(/\n-{3,}/)[0].replace(/\[([^\]]+)\]\[\d+\]/g, "$1").replace(/\(\[source\]\[\d+\]\)/g, "").trim(); };
 
 /* ============ Stockage IndexedDB ============ */
 const DB = {
@@ -282,18 +308,21 @@ function gbMap(it){ const v = it.volumeInfo || {}; const ids = v.industryIdentif
   cover = cover.replace(/^http:/, "https:").replace("&edge=curl", "");
   return { source:"Google Books", title: v.title || "", subtitle: v.subtitle || "", authors: v.authors || [], publisher: v.publisher || "",
     year: (v.publishedDate || "").slice(0, 4), pages: v.pageCount || "", categories: v.categories || [], cover, isbn,
-    description: v.description || "", lang: v.language || "" }; }
+    description: textOf(v.description), lang: v.language || "" }; }
 async function fromGoogle(isbn){ const j = await getJSON(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${gbKey()}`);
   return j.items && j.items.length ? gbMap(j.items[0]) : null; }
 async function fromOpenLibrary(isbn){
   const e = await getJSON(`https://openlibrary.org/isbn/${isbn}.json`);
   let authors = [];
   const aKeys = (e.authors || []).map(a => a.key).slice(0, 3);
-  if (!aKeys.length && e.works && e.works[0]) { try { const w = await getJSON(`https://openlibrary.org${e.works[0].key}.json`); (w.authors || []).forEach(a => a.author && aKeys.push(a.author.key)); } catch(_){} }
+  let description = olDesc(e), subjects = e.subjects || [];
+  if (e.works && e.works[0]) { try { const w = await getJSON(`https://openlibrary.org${e.works[0].key}.json`);
+    if (!aKeys.length) (w.authors || []).forEach(a => a.author && aKeys.push(a.author.key));
+    description = description || olDesc(w); subjects = subjects.concat(w.subjects || []); } catch(_){} }
   for (const k of aKeys) { try { const a = await getJSON(`https://openlibrary.org${k}.json`); if (a.name) authors.push(a.name); } catch(_){} }
   return { source:"Open Library", title: e.title || "", subtitle: e.subtitle || "", authors, publisher: (e.publishers || [])[0] || "",
     year: ((e.publish_date || "").match(/\d{4}/) || [""])[0], pages: e.number_of_pages || "", series: (e.series || [])[0] || "",
-    cover: e.covers && e.covers[0] > 0 ? `https://covers.openlibrary.org/b/id/${e.covers[0]}-M.jpg` : "", isbn }; }
+    cover: e.covers && e.covers[0] > 0 ? `https://covers.openlibrary.org/b/id/${e.covers[0]}-M.jpg` : "", isbn, description, subjects }; }
 async function fromBnF(isbn){
   const url = `https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve&query=${encodeURIComponent(`bib.isbn adj "${isbn}"`)}&recordSchema=dublincore&maximumRecords=1`;
   const ctl = new AbortController(); setTimeout(() => ctl.abort(), 8000);
@@ -303,7 +332,7 @@ async function fromBnF(isbn){
   const t = get("title")[0]; if (!t) return null;
   const [title] = t.split(" / ");
   return { source:"BnF", title: title.trim(), authors: get("creator").map(a => a.replace(/\s*\(.*\)\s*/g, "").replace(/\.\s*.*$/, "").trim()).slice(0, 3),
-    publisher: (get("publisher")[0] || "").replace(/\s*\(.*\)/, ""), year: ((get("date")[0] || "").match(/\d{4}/) || [""])[0], isbn, cover: "" }; }
+    description: get("description").join(" "), publisher: (get("publisher")[0] || "").replace(/\s*\(.*\)/, ""), year: ((get("date")[0] || "").match(/\d{4}/) || [""])[0], isbn, cover: "" }; }
 function merge(...rs){ const out = {}; for (const r of rs.filter(Boolean)) for (const [k, v] of Object.entries(r)) {
   if (out[k] === undefined || out[k] === "" || (Array.isArray(out[k]) && !out[k].length)) out[k] = v; } return out; }
 async function lookupIsbn(isbn){
@@ -315,7 +344,7 @@ async function lookupIsbn(isbn){
   // Couverture : Open Library d'abord (meilleure qualité), sinon Google
   const m = merge(gv, ov, bv);
   if (ov && ov.cover) m.cover = ov.cover;
-  if (!m.cover) m.cover = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false`;
+  m.categories = [...(m.categories || []), ...((ov && ov.subjects) || [])];
   m.source = [gv && "Google Books", ov && "Open Library", bv && "BnF"].filter(Boolean).join(" + ");
   return m;
 }
@@ -331,6 +360,36 @@ async function searchText(q, n = 6){
     series: (d.series || [])[0] || "", cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : "" }));
   // dédoublonnage titre+auteur
   const seen = new Set(); return out.filter(r => { const k = norm(r.title) + "|" + norm((r.authors || [])[0]); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+/* ============ Résumé ============ */
+async function findSummary(b){
+  const isbn = b.isbn && toIsbn13(b.isbn), author = (b.authors || [])[0] || "";
+  const titleQ = String(b.title || "").replace(/\s*[-–]\s*(tome|t\.?|n[°o])\s*\d+.*$/i, "");
+  const ok = d => d && d.replace(/\s+/g, " ").trim().length > 60;
+  const tries = [];
+  if (isbn) {
+    tries.push(async () => { const g = await fromGoogle(isbn); return g && g.description; });
+    tries.push(async () => { const o = await fromOpenLibrary(isbn); return o && o.description; });
+  }
+  tries.push(async () => { const j = await getJSON(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(`intitle:${titleQ}` + (author ? ` inauthor:${author.split(" ").slice(-1)[0]}` : ""))}&maxResults=6${gbKey()}`);
+    const it = (j.items || []).map(gbMap).find(m => ok(m.description)); return it && it.description; });
+  tries.push(async () => { const j = await getJSON(`https://openlibrary.org/search.json?q=${encodeURIComponent(titleQ + " " + author)}&limit=3&fields=key`);
+    for (const d of (j.docs || [])) { const w = await getJSON(`https://openlibrary.org${d.key}.json`); const ds = olDesc(w); if (ok(ds)) return ds; } });
+  tries.push(async () => { // Wikipédia FR : seulement si l'article parle bien d'un livre
+    const j = await getJSON(`https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(titleQ + " " + author)}&srlimit=3&format=json&origin=*`);
+    for (const r of ((j.query || {}).search || [])) {
+      const p = await getJSON(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(r.title.replace(/ /g, "_"))}`);
+      if (p.type === "standard" && /(roman|bande dessin|album|livre|essai|manga|recueil|nouvelle|conte|pi[eè]ce)/i.test((p.description || "") + " " + (p.extract || "").slice(0, 200))
+        && norm(p.title).includes(norm(titleQ).split(" ").slice(0, 3).join(" "))) return p.extract + "\n(Source : Wikipédia)"; } });
+  for (const t of tries) { try { const d = await t(); if (ok(d)) return d.trim(); } catch(_){} }
+  return "";
+}
+async function enrich(b, opts = {}){
+  let changed = false;
+  if (!b.summary || opts.force) { const d = await findSummary(b); if (d) { b.summary = d; changed = true; } }
+  if (changed) { const cur = S.books.find(x => x.id === b.id); if (cur) { cur.summary = b.summary; await saveBook(cur); } }
+  return changed;
 }
 
 /* ============ Détection série / tome ============ */
@@ -361,7 +420,7 @@ function bookFromMeta(m, extra = {}){
   const ds = detectSeries(m);
   return { id: uid(), isbn: m.isbn || "", title: m.title || "Sans titre", subtitle: m.subtitle || "", authors: m.authors || [],
     publisher: m.publisher || "", year: String(m.year || ""), pages: m.pages || "", cover: safeUrl(m.cover), categories: m.categories || [],
-    series: ds.series, tome: ds.tome, status: "alire", acquiredAt: today(), giftFrom: "", readAt: "", location: "", rating: 0,
+    series: ds.series, tome: ds.tome, type: guessType(m), summary: m.description || "", coverData: "", status: "alire", acquiredAt: today(), giftFrom: "", readAt: "", location: "", rating: 0,
     lists: [], notes: "", loan: null, loans: [], source: m.source || "", addedAt: Date.now(), ...extra };
 }
 async function addByIsbn(isbn, opts = {}){
@@ -369,7 +428,9 @@ async function addByIsbn(isbn, opts = {}){
   if (dup) return { status:"dup", book: dup };
   let meta = null; try { meta = await lookupIsbn(isbn); } catch(_){}
   if (!meta) return { status:"notfound", isbn };
-  const b = bookFromMeta(meta, opts.extra || {}); await saveBook(b); return { status:"added", book: b };
+  const b = bookFromMeta(meta, opts.extra || {}); await saveBook(b);
+  if (!b.summary) enrich(b).catch(() => {});
+  return { status:"added", book: b };
 }
 
 /* ============ Rendu : couverture ============ */
@@ -378,10 +439,24 @@ function coverHTML(b){
   const loan = b.loan ? `<span class="badge loan">Prêté</span>` : "";
   const read = !b.loan && b.status === "lu" ? `<span class="badge read">Lu</span>` : "";
   const gen = `<div class="gen" style="--c:${hashColor(b.series || b.title)}"><b>${esc(b.title)}</b><small>${esc((b.authors || [])[0] || "")}</small></div>`;
-  const img = safeUrl(b.cover) ? `<img loading="lazy" alt="" src="${esc(b.cover)}" onerror="this.remove()" onload="if(this.naturalWidth<5)this.remove()">` : "";
+  const l = coverList(b);
+  const img = l.length ? `<img loading="lazy" alt="" data-c="${esc(JSON.stringify(l.length > 1 ? l : []))}" data-i="0" src="${esc(l[0])}" onerror="coverFail(this)" onload="if(this.naturalWidth<5)coverFail(this)">` : "";
   return `<div class="cover">${gen}${img}${tome}${loan}${read}</div>`;
 }
 const authorsTxt = b => (b.authors || []).join(", ");
+function coverList(b){
+  if (b.coverData && /^data:image\/(jpeg|png|webp);base64,/.test(b.coverData)) return [b.coverData];
+  const l = []; if (safeUrl(b.cover)) l.push(b.cover);
+  const i = b.isbn && toIsbn13(b.isbn);
+  if (i) { l.push(`https://covers.openlibrary.org/b/isbn/${i}-M.jpg?default=false`);
+    if (i.startsWith("978")) l.push(`https://images-na.ssl-images-amazon.com/images/P/${isbn13to10(i)}.01.MZZZZZZZ.jpg`); }
+  return [...new Set(l)];
+}
+window.coverFail = img => { let l = []; try { l = JSON.parse(img.dataset.c || "[]"); } catch(_){}
+  const n = +img.dataset.i + 1; if (n < l.length) { img.dataset.i = n; img.src = l[n]; } else img.remove(); };
+function photoToDataUrl(file, max = 480){ return new Promise((res, rej) => { const img = new Image(); img.onload = () => {
+  const k = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL("image/jpeg", .82)); }; img.onerror = rej; img.src = URL.createObjectURL(file); }); }
 
 /* ============ Navigation ============ */
 const VIEWS = { livres: viewLibrary, ajouter: viewAdd, series: viewSeries, serie: viewSerie, prets: viewLoans, plus: viewMore };
@@ -411,7 +486,8 @@ function filtered(){
     if (u.filter === "serie" && !b.series) return false;
     if (u.filter === "offert" && !b.giftFrom) return false;
     if (u.list && !(b.lists || []).includes(u.list)) return false;
-    if (q && !norm([b.title, b.subtitle, authorsTxt(b), b.series, b.isbn, b.publisher, b.giftFrom, b.location, (b.lists || []).join(" ")].join(" ")).includes(q)) return false;
+    if (u.type && (b.type || "") !== u.type) return false;
+    if (q && !norm([b.title, b.subtitle, authorsTxt(b), b.series, b.type, b.isbn, b.publisher, b.giftFrom, b.location, (b.lists || []).join(" ")].join(" ")).includes(q)) return false;
     return true; });
   const c = (a, b) => String(a || "").localeCompare(String(b || ""), "fr", {sensitivity:"base", numeric:true});
   const sorts = {
@@ -423,6 +499,7 @@ function filtered(){
     read: (a, b) => c(b.readAt, a.readAt),
     year: (a, b) => c(b.year, a.year),
     rating: (a, b) => (b.rating || 0) - (a.rating || 0),
+    type: (a, b) => c(a.type || "~", b.type || "~") || c(a.series || a.title, b.series || b.title) || (a.tome || 0) - (b.tome || 0),
   };
   return r.sort(sorts[u.sort] || sorts.added);
 }
@@ -449,17 +526,19 @@ function renderShelf(){
       <p>Scanne le code-barres au dos d'un livre pour l'ajouter avec sa couverture.</p>
       <div class="btns"><a class="btn primary" href="#ajouter">Ajouter des livres</a><button class="btn" id="demo">Voir avec des exemples</button></div></div>`;
     $("#demo").onclick = loadDemo; return; }
-  const list = filtered(); const lists = allLists();
+  const list = filtered(); const lists = allLists(); const types = TYPES.filter(t => S.books.some(b => b.type === t));
   main.innerHTML = `<div class="toolbar"><span class="count">${list.length} livre${list.length > 1 ? "s" : ""}${list.length !== S.books.length ? ` sur ${S.books.length}` : ""}</span>
+      ${types.length ? `<select id="typeSel" aria-label="Type"><option value="">Tous les types</option>${types.map(t => `<option ${u.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>` : ""}
       ${lists.length ? `<select id="listSel" aria-label="Liste"><option value="">Toutes les listes</option>${lists.map(l => `<option ${u.list === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
-      <select id="sortSel" aria-label="Trier">${[["added","Ajout récent"],["title","Titre"],["author","Auteur"],["series","Série / tome"],["acquired","Date d'acquisition"],["read","Date de lecture"],["year","Année de parution"],["rating","Note"]]
+      <select id="sortSel" aria-label="Trier">${[["added","Ajout récent"],["title","Titre"],["author","Auteur"],["series","Série / tome"],["acquired","Date d'acquisition"],["read","Date de lecture"],["year","Année de parution"],["rating","Note"],["type","Type"]]
         .map(([k, l]) => `<option value="${k}" ${u.sort === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     ${list.length ? (u.view === "grid"
       ? `<div class="shelf">${list.map(b => `<button class="book" data-id="${b.id}">${coverHTML(b)}<span class="t">${esc(b.title)}</span><span class="a">${esc(authorsTxt(b))}</span></button>`).join("")}</div>`
       : `<div class="list">${list.map(b => `<button class="li" data-id="${b.id}">${coverHTML(b)}<div class="body"><div class="t">${esc(b.title)}</div>
           <div class="a">${esc(authorsTxt(b))}${b.series ? ` · ${esc(b.series)}${b.tome ? " T" + esc(b.tome) : ""}` : ""}</div>
-          <div class="row" style="margin-top:4px;gap:4px">${b.loan ? `<span class="pill ${isLate(b) ? "bad" : "loan"}">Prêté à ${esc(b.loan.to)}</span>` : ""}<span class="pill${b.status === "lu" ? " ok" : ""}">${STATUS[b.status] || ""}</span>${b.giftFrom ? `<span class="pill acc">Offert par ${esc(b.giftFrom)}</span>` : ""}</div></div></button>`).join("")}</div>`)
+          <div class="row" style="margin-top:4px;gap:4px">${b.loan ? `<span class="pill ${isLate(b) ? "bad" : "loan"}">Prêté à ${esc(b.loan.to)}</span>` : ""}${b.type ? `<span class="pill acc">${esc(b.type)}</span>` : ""}<span class="pill${b.status === "lu" ? " ok" : ""}">${STATUS[b.status] || ""}</span>${b.giftFrom ? `<span class="pill acc">Offert par ${esc(b.giftFrom)}</span>` : ""}</div></div></button>`).join("")}</div>`)
       : `<div class="empty"><p>Aucun livre ne correspond.</p></div>`}`;
+  const ts = $("#typeSel"); if (ts) ts.onchange = e => { u.type = e.target.value; saveUi(); renderShelf(); };
   const ls = $("#listSel"); if (ls) ls.onchange = e => { u.list = e.target.value; saveUi(); renderShelf(); };
   $("#sortSel").onchange = e => { u.sort = e.target.value; saveUi(); renderShelf(); };
   main.onclick = e => { const el = e.target.closest("[data-id]"); if (el) openBook(el.dataset.id); };
@@ -480,9 +559,14 @@ function openBook(id, isNew){
     <div class="detail-top">${coverHTML(b)}<div class="meta"><h3>${esc(b.title)}</h3><div class="muted">${esc(authorsTxt(b))}</div>
       <div class="small muted">${[b.publisher, b.year, b.pages && b.pages + " p."].filter(Boolean).map(esc).join(" · ")}</div>
       <div class="stars" id="stars">${[1,2,3,4,5].map(n => `<button data-n="${n}" class="${n <= b.rating ? "on" : ""}" aria-label="${n} étoile${n > 1 ? "s" : ""}">★</button>`).join("")}</div>
+      <div class="row" style="gap:6px"><button class="btn sm" id="cPhoto">Photo de couverture</button><button class="btn sm" id="cFind">Autre couverture</button></div>
       ${b.series ? `<a class="small" href="#serie--${encodeURIComponent(seriesKey(b.series))}" data-close>Voir la série ${esc(b.series)} →</a>` : ""}</div></div>
+    <div id="cPick"></div>
     <div class="form" id="bf">
       <div id="loanArea"></div>
+      <label class="f">Type<select id="f_type"><option value="">Non précisé</option>${TYPES.map(t => `<option ${b.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+      <label class="f">Résumé<textarea id="f_summary" rows="6" placeholder="Pas encore de résumé">${esc(b.summary || "")}</textarea></label>
+      <div class="row" style="margin-top:-4px"><button class="btn sm" id="sFind">Chercher le résumé en ligne</button><span class="small muted" id="sMsg"></span></div>
       <div class="grid2"><label class="f">Statut<select id="f_status">${Object.entries(STATUS).map(([k, l]) => `<option value="${k}" ${b.status === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Lu le<input type="date" id="f_readAt" value="${esc(b.readAt)}"></label></div>
       <div class="grid2"><label class="f">Acquis le<input type="date" id="f_acquiredAt" value="${esc(b.acquiredAt)}"></label>
@@ -507,6 +591,18 @@ function openBook(id, isNew){
   const el = sh.el;
   $("#stars", el).onclick = e => { const n = +e.target.dataset.n; if (!n) return; b.rating = b.rating === n ? 0 : n; $$("#stars button", el).forEach((x, i) => x.classList.toggle("on", i < b.rating)); };
   $("#f_status", el).onchange = e => { if (e.target.value === "lu" && !$("#f_readAt", el).value) $("#f_readAt", el).value = today(); };
+  const refreshCover = () => { const c = $(".detail-top .cover", el); if (c) c.outerHTML = coverHTML(b); };
+  $("#cPhoto", el).onclick = () => { coverTarget = async file => { try { b.coverData = await photoToDataUrl(file); refreshCover(); toast("Couverture prise. Pense à enregistrer."); } catch(_) { toast("Photo illisible"); } }; $("#fileCover").click(); };
+  $("#cFind", el).onclick = async () => { const box = $("#cPick", el); box.innerHTML = `<div class="small muted" style="margin-bottom:10px">Recherche de couvertures…</div>`;
+    let items = []; try { items = await searchText([b.title.replace(/\s*[-–]\s*(tome|t\.?|n[°o])\s*\d+.*$/i, ""), (b.authors || [])[0]].filter(Boolean).join(" "), 12); } catch(_){}
+    const urls = [...new Set(items.map(m => safeUrl(m.cover)).filter(Boolean))];
+    if (!urls.length) { box.innerHTML = `<div class="small muted" style="margin-bottom:10px">Aucune couverture trouvée. Prends-la en photo.</div>`; return; }
+    box.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="small" style="margin-bottom:8px"><b>Choisis la bonne couverture</b></div><div class="coverpick">${urls.map(u => `<button data-u="${esc(u)}"><div class="cover"><img src="${esc(u)}" alt="" onerror="this.closest('button').remove()" onload="if(this.naturalWidth<5)this.closest('button').remove()"></div></button>`).join("")}</div></div>`;
+    box.onclick = e => { const x = e.target.closest("[data-u]"); if (!x) return; b.cover = x.dataset.u; b.coverData = ""; refreshCover(); box.innerHTML = ""; toast("Couverture choisie. Pense à enregistrer."); }; };
+  $("#sFind", el).onclick = async () => { const m = $("#sMsg", el); m.textContent = "Recherche…"; $("#sFind", el).disabled = true;
+    const tmp = { ...b, title: $("#f_title", el).value.trim() || b.title, authors: $("#f_authors", el).value.split(",").map(s => s.trim()).filter(Boolean), isbn: cleanIsbn($("#f_isbn", el).value) };
+    const d = await findSummary(tmp); $("#sFind", el).disabled = false;
+    if (d) { $("#f_summary", el).value = d; m.textContent = "Trouvé. Pense à enregistrer."; } else m.textContent = "Rien trouvé en ligne. Tu peux l'écrire toi-même."; };
   const renderLoan = () => {
     const a = $("#loanArea", el);
     if (b.loan) a.innerHTML = `<div class="loanbox"><div><b>Prêté à ${esc(b.loan.to)}</b> depuis le ${fmtDate(b.loan.date)}${b.loan.due ? `<br><span class="${isLate(b) ? "pill bad" : "small"}">Retour prévu le ${fmtDate(b.loan.due)}</span>` : ""}</div>
@@ -523,7 +619,7 @@ function openBook(id, isNew){
   renderLoan();
   $("#saveBtn", el).onclick = async () => {
     const v = id => $("#" + id, el).value.trim();
-    Object.assign(b, { status: v("f_status"), readAt: v("f_readAt"), acquiredAt: v("f_acquiredAt"), giftFrom: v("f_giftFrom"), location: v("f_location"), notes: $("#f_notes", el).value,
+    Object.assign(b, { type: v("f_type"), summary: $("#f_summary", el).value.trim(), status: v("f_status"), readAt: v("f_readAt"), acquiredAt: v("f_acquiredAt"), giftFrom: v("f_giftFrom"), location: v("f_location"), notes: $("#f_notes", el).value,
       lists: v("f_lists").split(",").map(s => s.trim()).filter(Boolean), title: v("f_title") || b.title, authors: v("f_authors").split(",").map(s => s.trim()).filter(Boolean),
       series: v("f_series"), tome: v("f_tome") ? +v("f_tome") : "", publisher: v("f_publisher"), year: v("f_year"), isbn: cleanIsbn(v("f_isbn")), pages: v("f_pages"), cover: safeUrl(v("f_cover")) });
     if (b.status === "lu" && !b.readAt) b.readAt = today();
@@ -533,6 +629,9 @@ function openBook(id, isNew){
     $("#noDel", el).onclick = () => $("#delConfirm", el).innerHTML = "";
     $("#yesDel", el).onclick = async () => { await removeBook(b.id); sh.close(); toast("Livre supprimé"); route(); }; };
 }
+
+let coverTarget = null;
+$("#fileCover").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f && coverTarget) coverTarget(f); coverTarget = null; };
 
 /* ============ Vue : ajouter ============ */
 const session = []; // derniers ajouts de la session
@@ -845,6 +944,9 @@ function viewMore(){
     <div class="section"><h2>Listes</h2>${lists.length ? `<div class="chips" style="flex-wrap:wrap">${lists.map(l => `<button class="chip" data-list="${esc(l)}">${esc(l)} · ${bs.filter(b => (b.lists || []).includes(l)).length}</button>`).join("")}</div>`
       : `<p class="small muted">Ajoute des listes depuis la fiche d'un livre (champ « Listes »).</p>`}</div>
     ${Object.keys(givers).length ? `<div class="section"><h2>Offerts par</h2><div class="chips" style="flex-wrap:wrap">${Object.entries(givers).sort((a, b) => b[1] - a[1]).map(([g, n]) => `<button class="chip" data-giver="${esc(g)}">${esc(g)} · ${n}</button>`).join("")}</div></div>` : ""}
+    <div class="section"><h2>Compléter les fiches</h2><div class="card form">
+      <p class="small muted" style="margin:0">Cherche en ligne les résumés, types et couvertures qui manquent. ${bs.filter(b => !b.summary).length} sans résumé, ${bs.filter(b => !b.type).length} sans type.</p>
+      <div class="row"><button class="btn primary" id="fillBtn">Compléter</button><span class="small muted" id="fillMsg"></span></div></div></div>
     <div class="section"><h2>Sauvegarde</h2><div class="card form">
       <p class="small muted" style="margin:0">Tes données restent sur ce téléphone (stockage du navigateur). Exporte régulièrement une copie.</p>
       <div class="row"><button class="btn" id="exJson">Exporter (JSON)</button><button class="btn" id="exCsv">Exporter (CSV / Excel)</button><button class="btn" id="imJson">Importer</button></div></div></div>
@@ -856,8 +958,20 @@ function viewMore(){
   $("#main").onclick = e => { const l = e.target.closest("[data-list]"); if (l) { Object.assign(S.ui, { list: l.dataset.list, filter: "all", q: "" }); saveUi(); location.hash = "#livres"; }
     const g = e.target.closest("[data-giver]"); if (g) { Object.assign(S.ui, { q: g.dataset.giver, filter: "offert", list: "" }); saveUi(); location.hash = "#livres"; } };
   $("#gbk").onchange = e => setSetting("gbKey", e.target.value.trim());
+  $("#fillBtn").onclick = async () => { const btn = $("#fillBtn"), msg = $("#fillMsg"); btn.disabled = true;
+    const todo = S.books.filter(b => !b.summary || !b.type || (!b.cover && !b.coverData)); let n = 0, got = 0;
+    for (const b0 of todo) { msg.textContent = `${++n} / ${todo.length} : ${b0.title}`;
+      const b = S.books.find(x => x.id === b0.id); if (!b) continue; let ch = false;
+      const isbn = b.isbn && toIsbn13(b.isbn);
+      if (isbn && (!b.type || !b.cover)) { try { const m = await lookupIsbn(isbn); if (m) {
+        if (!b.type) { const t = guessType(m); if (t) { b.type = t; ch = true; } }
+        if (!b.cover && !b.coverData && safeUrl(m.cover)) { b.cover = m.cover; ch = true; }
+        if (!b.summary && m.description) { b.summary = m.description; ch = true; } } } catch(_){} }
+      if (!b.summary) { try { const d = await findSummary(b); if (d) { b.summary = d; ch = true; } } catch(_){} }
+      if (ch) { await saveBook(b); got++; } await sleep(250); }
+    msg.textContent = `Terminé : ${got} fiche${got > 1 ? "s" : ""} complétée${got > 1 ? "s" : ""}.`; btn.disabled = false; };
   $("#exJson").onclick = () => download(`bibliotheque-${today()}.json`, JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), books: S.books, series: Object.values(S.series) }, null, 1), "application/json");
-  $("#exCsv").onclick = () => { const cols = ["title","authors","series","tome","isbn","publisher","year","status","acquiredAt","giftFrom","readAt","rating","location","lists","loanTo","loanDate","notes"];
+  $("#exCsv").onclick = () => { const cols = ["title","authors","type","series","tome","isbn","publisher","year","status","acquiredAt","giftFrom","readAt","rating","location","lists","loanTo","loanDate","notes","summary"];
     const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const rows = S.books.map(b => cols.map(c => q(c === "authors" ? authorsTxt(b) : c === "lists" ? (b.lists || []).join(", ") : c === "loanTo" ? (b.loan || {}).to : c === "loanDate" ? (b.loan || {}).date : c === "status" ? STATUS[b.status] : b[c])).join(";"));
     download(`bibliotheque-${today()}.csv`, "﻿" + cols.join(";") + "\n" + rows.join("\n"), "text/csv"); };
@@ -875,13 +989,13 @@ $("#fileImport").onchange = async e => { const f = e.target.files[0]; e.target.v
 /* ============ Démo ============ */
 async function loadDemo(){
   const demo = [
-    { title:"Astérix le Gaulois", authors:["René Goscinny","Albert Uderzo"], series:"Astérix", tome:1, status:"lu", readAt:"2025-08-02", giftFrom:"Papa", lists:["BD"] },
+    { title:"Astérix le Gaulois", authors:["René Goscinny","Albert Uderzo"], series:"Astérix", tome:1, type:"BD", status:"lu", readAt:"2025-08-02", giftFrom:"Papa", lists:["BD"] },
     { title:"La Serpe d'or", authors:["René Goscinny","Albert Uderzo"], series:"Astérix", tome:2, status:"lu", lists:["BD"] },
     { title:"Astérix et les Goths", authors:["René Goscinny","Albert Uderzo"], series:"Astérix", tome:3, status:"alire", lists:["BD"], loan:{ to:"Julie", date:"2026-10-02", due:"2026-11-01" } },
     { title:"Astérix chez les Bretons", authors:["René Goscinny","Albert Uderzo"], series:"Astérix", tome:8, status:"lu", lists:["BD"] },
     { title:"Le Secret de l'Espadon", authors:["Edgar P. Jacobs"], series:"Blake et Mortimer", tome:1, status:"lu", lists:["BD"] },
     { title:"La Marque jaune", authors:["Edgar P. Jacobs"], series:"Blake et Mortimer", tome:6, status:"encours", lists:["BD","Favoris"] },
-    { title:"L'Étranger", authors:["Albert Camus"], status:"lu", readAt:"2024-03-12", lists:["Classiques"], giftFrom:"Marie" },
+    { title:"L'Étranger", authors:["Albert Camus"], type:"Roman", summary:"Meursault, employé de bureau à Alger, tue un Arabe sur une plage. Son procès juge moins le crime que son indifférence.", status:"lu", readAt:"2024-03-12", lists:["Classiques"], giftFrom:"Marie" },
     { title:"Le Petit Prince", authors:["Antoine de Saint-Exupéry"], status:"lu", lists:["Classiques","Favoris"], rating:5 },
   ];
   for (const [i, d] of demo.entries()) { const b = bookFromMeta({ title: d.title, authors: d.authors, source:"Exemple" }); Object.assign(b, d, { addedAt: Date.now() - i * 1000, notes: "Exemple, à supprimer" }); await saveBook(b); }
