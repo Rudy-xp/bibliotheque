@@ -259,10 +259,10 @@ function guessType(m){
 }
 function isbn13to10(i){ const b = i.slice(3, 12); let s = 0; for (let k = 0; k < 9; k++) s += +b[k] * (10 - k); const c = (11 - s % 11) % 11; return b + (c === 10 ? "X" : c); }
 function isFrench(t){ const w = " " + norm(t) + " "; const fr = (w.match(/ (le|la|les|des|du|et|une|est|dans|pour|qui|sur|avec|son|ses|il|elle) /g) || []).length;
-  const ot = (w.match(/ (the|and|of|with|is|his|her|el|los|las|con|una|der|die|und|het|een) /g) || []).length; return fr > ot; }
+  const ot = (w.match(/ (the|and|of|with|is|his|her|el|los|las|del|con|una|por|para|es|mas|der|die|und|het|een|il|di|che) /g) || []).length; return fr >= 2 && fr > ot; }
 const textOf = html => new DOMParser().parseFromString(String(html || ""), "text/html").body.textContent.trim();
 const olDesc = w => { const d = typeof w.description === "string" ? w.description : (w.description && w.description.value) || "";
-  return d.split(/\n-{3,}/)[0].replace(/\[([^\]]+)\]\[\d+\]/g, "$1").replace(/\(\[source\]\[\d+\]\)/g, "").trim(); };
+  return d.split(/\n-{3,}/)[0].replace(/\[([^\]]+)\]\[\d+\]/g, "$1").replace(/\(\[source\]\[\d+\]\)/g, "").replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1").trim(); };
 
 /* ============ Stockage IndexedDB ============ */
 const DB = {
@@ -445,7 +445,7 @@ async function findSummary(b){
       if (p.type === "standard" && /(roman|bande dessin|album|livre|essai|manga|recueil|nouvelle|conte|pi[eè]ce)/i.test((p.description || "") + " " + (p.extract || "").slice(0, 200))
         && norm(p.title).includes(norm(titleQ).split(" ").slice(0, 3).join(" "))) return p.extract + "\n(Source : Wikipédia)"; } });
   let other = "";
-  for (const t of tries) { try { const d = await t(); if (ok(d)) { if (isFrench(d)) return d.trim(); other ||= d.trim(); } } catch(_){} }
+  for (const t of tries) { try { const d = await t(); if (ok(d) && isFrench(d)) return d.trim(); } catch(_){} }
   return other;
 }
 async function enrich(b, opts = {}){
