@@ -1127,7 +1127,7 @@ async function bnfSeries(q){
       const name = (sub(f, "t") || sub(f, "a")).replace(/\s*[;,.:]\s*$/, "").trim();
       if (!name || /^(hors collection|collection|poche|folio|j'ai lu|le livre de poche)/i.test(name)) continue;
       const t = (sub(f, "v").match(/\d{1,3}/) || [""])[0];
-      return { series: name, tome: t ? +t : "", src: "BnF" };
+      return { series: name.replace(/^(une aventure|les aventures|les nouvelles aventures) (de |d'|du |des )/i, "").replace(/^(l'|la |le )?(.)/, (m0, a1, c) => (a1 || "") + c).trim() || name, tome: t ? +t : "", src: "BnF" };
     }
   }
   return null;

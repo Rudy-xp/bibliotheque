@@ -1,4 +1,4 @@
-const C = "biblio-v17";
+const C = "biblio-v18";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png"];
 const CDN = /(unpkg\.com|cdn\.jsdelivr\.net|covers\.openlibrary\.org|books\.google\.com|fonts\.(googleapis|gstatic)\.com)$/;
 self.addEventListener("install", e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
