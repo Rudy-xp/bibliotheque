@@ -647,7 +647,8 @@ function openBook(id, isNew){
       <div class="small muted">${[b.publisher, b.year, b.pages && b.pages + " p."].filter(Boolean).map(esc).join(" · ")}</div>
       <div class="stars" id="stars">${[1,2,3,4,5].map(n => `<button data-n="${n}" class="${n <= b.rating ? "on" : ""}" aria-label="${n} étoile${n > 1 ? "s" : ""}">★</button>`).join("")}</div>
       <div class="row" style="gap:4px"><button class="btn xs" id="cPhoto">Photo couverture</button><button class="btn xs" id="cFind">Autre couverture</button><button class="btn xs" id="cDrop"${b.coverData ? "" : " hidden"}>Retirer la photo</button></div>
-      ${b.series ? `<a class="small" href="#serie--${encodeURIComponent(seriesKey(b.series))}" data-close>Série ${esc(b.series)} →</a>` : ""}</div></div>
+      <div class="row" style="gap:6px"><span id="serLink">${b.series ? `<a class="small" href="#serie--${encodeURIComponent(seriesKey(b.series))}" data-close>Série ${esc(b.series)}${b.tome ? " · T" + esc(b.tome) : ""} →</a>` : ""}</span><button class="btn xs" data-findser>Chercher la série</button></div>
+      <div class="small muted" id="serMsg"></div></div></div>
     <div id="cPick"></div>
     <div class="form" id="bf">
       <div id="loanArea"></div>
@@ -668,6 +669,7 @@ function openBook(id, isNew){
           <label class="f">Titre<input type="text" id="f_title" value="${esc(b.title)}"></label>
           <label class="f">Auteur(s)<input type="text" id="f_authors" value="${esc(authorsTxt(b))}"></label>
           <div class="grid2"><label class="f">Série<input type="text" id="f_series" value="${esc(b.series)}"></label><label class="f">Tome<input type="number" min="0" id="f_tome" value="${esc(b.tome)}"></label></div>
+          <div class="row"><button class="btn xs" data-findser>Chercher la série en ligne</button></div>
           <div class="grid2"><label class="f">Éditeur<input type="text" id="f_publisher" value="${esc(b.publisher)}"></label><label class="f">Année<input type="text" inputmode="numeric" id="f_year" value="${esc(b.year)}"></label></div>
           <div class="grid2"><label class="f">ISBN<input type="text" inputmode="numeric" id="f_isbn" value="${esc(b.isbn)}"></label><label class="f">Pages<input type="number" id="f_pages" value="${esc(b.pages)}"></label></div>
           <label class="f">URL de la couverture<input type="text" id="f_cover" value="${esc(b.cover)}" placeholder="https://…"></label>
@@ -727,6 +729,18 @@ function openBook(id, isNew){
     const rb = $("#retBtn", el); if (rb) rb.onclick = () => { b.loans = b.loans || []; b.loans.push({ ...b.loan, returnedAt: today() }); b.loan = null; renderLoan(); persistLoan(); };
   };
   renderLoan();
+  $$("[data-findser]", el).forEach(btn => btn.onclick = async () => {
+    const msg = $("#serMsg", el); const v = id => $("#" + id, el).value.trim();
+    const q = { title: v("f_title") || b.title, authors: v("f_authors").split(",").map(x => x.trim()).filter(Boolean), isbn: cleanIsbn(v("f_isbn")), subtitle: b.subtitle || "" };
+    $$("[data-findser]", el).forEach(x => x.disabled = true); msg.textContent = "Recherche de la série…";
+    let r = null; try { r = await findSeriesFor(q); } catch (err) { console.error(err); }
+    $$("[data-findser]", el).forEach(x => x.disabled = false);
+    if (!r) { msg.textContent = "Aucune série trouvée. Tape-la dans Infos du livre → Série."; return; }
+    $("#f_series", el).value = r.series; if (r.tome) $("#f_tome", el).value = r.tome;
+    b.series = r.series; if (r.tome) b.tome = r.tome;
+    $("#serLink", el).innerHTML = `<a class="small" href="#serie--${encodeURIComponent(seriesKey(r.series))}" data-close>Série ${esc(r.series)}${r.tome ? " · T" + esc(r.tome) : ""} →</a>`;
+    msg.textContent = `Trouvé via ${r.src}. Enregistré à la fermeture.`;
+  });
   let saving = false;
   const snap = () => JSON.stringify([...$$("input,textarea,select", el)].filter(i => i.id && !i.closest("#loanArea")).map(i => i.value).concat([b.cover || "", b.coverData || ""]));
   let snap0 = snap(); const dirtyNow = () => snap() !== snap0;
@@ -1098,6 +1112,50 @@ function viewSerie(key){
       const b = bookFromMeta({ title: `${meta.name || g.name} - Tome ${n}`, authors: (g.books[0] || {}).authors || [] }); b.series = meta.name || g.name; b.tome = n; b.acquiredAt = ""; await saveBook(b); viewSerie(key); openBook(b.id, true); return; }
     const el = e.target.closest("[data-id]"); if (el) openBook(el.dataset.id);
   };
+}
+/* ============ Recherche de série à la demande ============ */
+async function bnfSeries(q){
+  const cql = q.isbn ? `bib.isbn adj "${q.isbn}"` : `bib.title all "${q.title.replace(/"/g, " ")}"` + (q.authors[0] ? ` and bib.author all "${q.authors[0].split(" ").slice(-1)[0].replace(/"/g, " ")}"` : "");
+  const url = `https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve&query=${encodeURIComponent(cql)}&recordSchema=unimarcxchange&maximumRecords=5`;
+  const ctl = new AbortController(); setTimeout(() => ctl.abort(), 9000);
+  const x = new DOMParser().parseFromString(await (await fetch(url, { signal: ctl.signal })).text(), "text/xml");
+  for (const rec of [...x.getElementsByTagNameNS("*", "record")]) {
+    const df = [...rec.getElementsByTagNameNS("*", "datafield")];
+    const sub = (f, c) => { const e = [...f.getElementsByTagNameNS("*", "subfield")].find(z => z.getAttribute("code") === c); return e ? e.textContent.trim() : ""; };
+    for (const tag of ["461", "225", "410"]) {
+      const f = df.find(d => d.getAttribute("tag") === tag); if (!f) continue;
+      const name = (sub(f, "t") || sub(f, "a")).replace(/\s*[;,.:]\s*$/, "").trim();
+      if (!name || /^(hors collection|collection|poche|folio|j'ai lu|le livre de poche)/i.test(name)) continue;
+      const t = (sub(f, "v").match(/\d{1,3}/) || [""])[0];
+      return { series: name, tome: t ? +t : "", src: "BnF" };
+    }
+  }
+  return null;
+}
+async function wikiSeries(q){
+  const tq = q.title.replace(/\s*[-–]\s*(tome|t\.?|n[°o])\s*\d+.*$/i, "");
+  const j = await getJSON(`https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(tq + " bande dessinée " + (q.authors[0] || ""))}&srlimit=4&format=json&origin=*`);
+  const cands = [tq, tq + " (album)", ...((j.query || {}).search || []).map(r => r.title)];
+  for (const t of cands) {
+    let p; try { p = await getJSON(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.replace(/ /g, "_"))}`); } catch (_) { continue; }
+    const txt = (p.description || "") + " " + (p.extract || "").slice(0, 400);
+    const m = txt.match(/(?:(\d{1,3})(?:e|ème|er)?\s+(?:album|tome|volume)|(?:album|tome|volume)\s+n?°?\s*(\d{1,3}))\s+de\s+la\s+série\s+(?:de\s+bande\s+dessinée\s+|BD\s+)?([^,.;()]+)/i)
+      || txt.match(/(?:album|tome|volume)\s+de\s+la\s+série\s+(?:de\s+bande\s+dessinée\s+|BD\s+)?([^,.;()]+)/i);
+    if (m) { const name = (m[3] || m[1]).trim(), n = m[3] ? +(m[1] || m[2]) : "";
+      if (name && name.length < 60 && !/^\d+$/.test(name)) return { series: name.replace(/^« ?| ?»$/g, ""), tome: n || "", src: "Wikipédia" }; }
+  }
+  return null;
+}
+async function findSeriesFor(q){
+  const local = detectSeries(q); if (local.series) return { ...local, src: "le titre" };
+  const tries = [];
+  if (q.isbn) tries.push(async () => { const m = await lookupIsbn(q.isbn); if (!m) return null; const d = detectSeries(m); return d.series ? { ...d, src: m.source || "la fiche ISBN" } : null; });
+  tries.push(() => bnfSeries(q));
+  tries.push(async () => { const j = await getJSON(`https://openlibrary.org/search.json?q=${encodeURIComponent(q.title + " " + (q.authors[0] || ""))}&limit=5&fields=title,subtitle,series,author_name`);
+    for (const d of (j.docs || [])) { const r = detectSeries({ title: d.title, subtitle: d.subtitle, series: (d.series || [])[0] || "" }); if (r.series) return { ...r, src: "Open Library" }; } return null; });
+  tries.push(() => wikiSeries(q));
+  for (const t of tries) { try { const r = await t(); if (r && r.series) return r; } catch (_) {} }
+  return null;
 }
 async function findSeriesTomes(name, books){
   const author = ((books[0] || {}).authors || [])[0] || "";
