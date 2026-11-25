@@ -993,7 +993,7 @@ function viewMore(){
       : `<p class="small muted" style="margin:0">Connecte-toi pour retrouver ta bibliothèque sur ton Mac et tes autres appareils. Les livres déjà sur ce téléphone seront envoyés.</p>
         <input type="text" id="sbEmail" inputmode="email" autocomplete="email" placeholder="Email">
         <input type="password" id="sbPass" autocomplete="current-password" placeholder="Mot de passe (6 caractères min.)">
-        <div class="row"><button class="btn primary" id="inBtn">Se connecter</button><button class="btn" id="upBtn">Créer un compte</button></div>
+        <div class="row"><button class="btn primary" id="inBtn">Se connecter</button><span class="small muted">Création de compte bientôt disponible.</span></div>
         <div class="small muted" id="authMsg"></div>`}</div></div>
     <div class="stat"><div><b>${bs.length}</b><span>livres</span></div><div><b>${bs.filter(b => b.status === "lu").length}</b><span>lus</span></div>
       <div><b>${readY}</b><span>lus en ${y}</span></div><div><b>${bs.filter(b => b.status === "alire").length}</b><span>à lire</span></div>
@@ -1021,7 +1021,7 @@ function viewMore(){
     $("#inBtn").onclick = async () => { const c = creds(); if (!c.email || !c.password) return msg("Indique ton email et ton mot de passe."); msg("Connexion…");
       const { error } = await sb.auth.signInWithPassword(c);
       if (error) msg(/confirm/i.test(error.message) ? "Confirme d'abord ton email (lien reçu), puis reconnecte-toi." : "Email ou mot de passe incorrect."); };
-    $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 6) return msg("Email et mot de passe de 6 caractères minimum."); msg("Création du compte…");
+    if ($("#upBtn")) $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 6) return msg("Email et mot de passe de 6 caractères minimum."); msg("Création du compte…");
       const { data, error } = await sb.auth.signUp({ ...c, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) return msg(/registered|exists/i.test(error.message) ? "Ce compte existe déjà : clique sur « Se connecter »." : "Erreur : " + error.message);
       msg(data.session ? "Compte créé, synchro en cours." : "Compte créé. Clique sur le lien reçu par email pour le confirmer, puis reviens ici et connecte-toi."); }; }
