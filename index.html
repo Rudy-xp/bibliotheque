@@ -329,13 +329,29 @@ const SB_URL = "https://jhznhkpugkzrcgjhqwml.supabase.co", SB_KEY = "sb_publisha
 const FN = SB_URL + "/functions/v1/", SIGNUP_READY = true, URL_IMPORT_READY = true;
 async function callFn(name, body){ const r = await fetch(FN + name, { method: "POST", headers: { "Content-Type": "application/json", apikey: SB_KEY }, body: JSON.stringify(body) });
   let j = {}; try { j = await r.json(); } catch(_){} return { ok: r.ok, status: r.status, data: j }; }
-let sb = null, sbUser = null, syncT = null, syncing = false, syncState = "";
+let sb = null, sbUser = null, syncT = null, syncing = false, syncState = "", authReady = false;
+// Connexion obligatoire. Hors ligne, un appareil déjà connecté garde l'accès à ses données locales.
+const needLogin = () => !sbUser && !(S.settings.lastUserId && (!sb || !navigator.onLine));
+async function wipeLocal(){ for (const st of ["books", "series", "pending"]) await DB.clear(st);
+  for (const k of ["lastPull", "tombs", "lastUserId"]) await setSetting(k, k === "tombs" ? {} : "");
+  await setSetting("lastPush", 0); S.books = []; S.series = {}; S.pending = []; }
+async function onLogin(user){
+  // autre compte que le précédent sur cet appareil : on repart de zéro pour ne pas mélanger les bibliothèques
+  if (S.settings.lastUserId && S.settings.lastUserId !== user.id) await wipeLocal();
+  await setSetting("lastUserId", user.id);
+}
+async function signOutAll(){
+  try { if (sbUser) await syncNow(); } catch(_){}
+  try { await sb.auth.signOut(); } catch(_){}
+  sbUser = null; await wipeLocal(); location.hash = "#livres"; route();
+}
 function initSync(){
   if (!window.supabase || !window.supabase.createClient) return;
   try { sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }); } catch(_) { return; }
-  sb.auth.onAuthStateChange((ev, session) => { const was = sbUser; sbUser = session ? session.user : null;
-    if (sbUser && !was) setTimeout(syncNow, 50);
-    if (location.hash === "#plus") viewMore(); });
+  sb.auth.onAuthStateChange((ev, session) => { const was = sbUser; sbUser = session ? session.user : null; const first = !authReady; authReady = true;
+    if (sbUser && !was) setTimeout(async () => { await onLogin(sbUser); syncNow(); route(); }, 50);
+    else if (first || (!sbUser && was)) route();
+    else if (location.hash === "#plus") viewMore(); });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") scheduleSync(300); });
   setInterval(() => { if (document.visibilityState === "visible") syncNow(); }, 60000);
 }
@@ -553,7 +569,36 @@ function photoToDataUrl(file, max = 480){ return new Promise((res, rej) => { con
 
 /* ============ Navigation ============ */
 const VIEWS = { livres: viewLibrary, ajouter: viewAdd, series: viewSeries, serie: viewSerie, prets: viewLoans, plus: viewMore };
+function viewLogin(){
+  setTop(`<div class="row"><h1>Ma bibliothèque</h1></div>`);
+  $("#tabs").style.display = "none";
+  if (!authReady && sb) { $("#main").innerHTML = `<div class="empty"><p class="muted">Chargement…</p></div>`; return; }
+  $("#main").innerHTML = `<div class="section" style="margin-top:12px"><div class="card form">
+    <h2 style="margin:0">Connexion</h2>
+    ${!sb ? `<p class="small muted" style="margin:0">Pas de réseau. Connecte-toi à Internet pour ouvrir ta bibliothèque.</p><div class="row"><button class="btn" onclick="location.reload()">Réessayer</button></div>`
+    : `<p class="small muted" style="margin:0">Connecte-toi pour voir et ajouter tes livres. Ta bibliothèque est la même sur tous tes appareils.</p>
+    <input type="text" id="sbEmail" inputmode="email" autocomplete="email" placeholder="Email">
+    <input type="password" id="sbPass" autocomplete="current-password" placeholder="Mot de passe (8 caractères min.)">
+    <div class="row"><button class="btn primary" id="inBtn">Se connecter</button>${SIGNUP_READY ? `<button class="btn" id="upBtn">Créer un compte</button>` : ""}</div>
+    <div class="small muted" id="authMsg"></div>`}</div></div>`;
+  if (sb) bindAuthForm();
+}
+function bindAuthForm(){
+  const msg = t => $("#authMsg").textContent = t;
+  const creds = () => ({ email: $("#sbEmail").value.trim(), password: $("#sbPass").value });
+  $("#sbPass").onkeydown = e => { if (e.key === "Enter") $("#inBtn").click(); };
+  $("#inBtn").onclick = async () => { const c = creds(); if (!c.email || !c.password) return msg("Indique ton email et ton mot de passe."); msg("Connexion…");
+    const { error } = await sb.auth.signInWithPassword(c);
+    if (error) msg(/confirm/i.test(error.message) ? "Confirme d'abord ton email (lien reçu), puis reconnecte-toi." : "Email ou mot de passe incorrect."); };
+  if ($("#upBtn")) $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 8) return msg("Indique un email et un mot de passe de 8 caractères minimum."); msg("Création du compte…");
+    let r; try { r = await callFn("signup", c); } catch(_) { return msg("Pas de connexion. Réessaie."); }
+    if (r.status === 409) return msg("Ce compte existe déjà : clique sur « Se connecter ».");
+    if (!r.ok) return msg((r.data && r.data.error) || "Création impossible pour le moment.");
+    msg("Compte créé, connexion…"); const { error } = await sb.auth.signInWithPassword(c); if (error) msg("Compte créé. Clique sur « Se connecter »."); };
+}
 function route(){
+  if (needLogin()) { $$("#layer .sheet-bg").forEach(x => x.remove()); $("#main").onclick = null; return viewLogin(); }
+  $("#tabs").style.display = "";
   const [v, arg] = (location.hash.slice(1) || "livres").split("--");
   const fn = VIEWS[v] || viewLibrary;
   $("#main").onclick = null; $$("#layer .sheet-bg").forEach(x => x.remove());
@@ -1290,17 +1335,8 @@ function viewMore(){
   $("#main").onclick = e => { const l = e.target.closest("[data-list]"); if (l) { Object.assign(S.ui, { list: l.dataset.list, filter: "all", q: "" }); saveUi(); location.hash = "#livres"; }
     const g = e.target.closest("[data-giver]"); if (g) { Object.assign(S.ui, { q: g.dataset.giver, filter: "offert", list: "" }); saveUi(); location.hash = "#livres"; } };
   $("#gbk").onchange = e => setSetting("gbKey", e.target.value.trim());
-  if (sb && sbUser) { $("#syncBtn").onclick = () => syncNow(); $("#outBtn").onclick = async () => { await sb.auth.signOut(); sbUser = null; await setSetting("lastPull", ""); await setSetting("lastPush", 0); viewMore(); }; }
-  else if (sb) { const msg = t => $("#authMsg").textContent = t;
-    const creds = () => ({ email: $("#sbEmail").value.trim(), password: $("#sbPass").value });
-    $("#inBtn").onclick = async () => { const c = creds(); if (!c.email || !c.password) return msg("Indique ton email et ton mot de passe."); msg("Connexion…");
-      const { error } = await sb.auth.signInWithPassword(c);
-      if (error) msg(/confirm/i.test(error.message) ? "Confirme d'abord ton email (lien reçu), puis reconnecte-toi." : "Email ou mot de passe incorrect."); };
-    if ($("#upBtn")) $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 8) return msg("Indique un email et un mot de passe de 8 caractères minimum."); msg("Création du compte…");
-      let r; try { r = await callFn("signup", c); } catch(_) { return msg("Pas de connexion. Réessaie."); }
-      if (r.status === 409) return msg("Ce compte existe déjà : clique sur « Se connecter ».");
-      if (!r.ok) return msg((r.data && r.data.error) || "Création impossible pour le moment.");
-      msg("Compte créé, connexion…"); const { error } = await sb.auth.signInWithPassword(c); if (error) msg("Compte créé. Clique sur « Se connecter »."); }; }
+  if (sb && sbUser) { $("#syncBtn").onclick = () => syncNow(); $("#outBtn").onclick = () => signOutAll(); }
+  else if (sb && $("#inBtn")) bindAuthForm();
   renderTypes();
   $("#fillBtn").onclick = async () => { const btn = $("#fillBtn"), msg = $("#fillMsg"); btn.disabled = true;
     const todo = S.books.filter(b => !b.summary || !b.type || (!b.cover && !b.coverData)); let n = 0, got = 0;
@@ -1378,7 +1414,7 @@ function toast(msg, act, fn){ $$(".toast").forEach(t => t.remove()); const t = d
 (async () => {
   try { await DB.open(); await loadAll(); } catch (e) { $("#main").innerHTML = `<div class="empty"><h2>Stockage indisponible</h2><p>Ouvre l'app dans un navigateur normal (pas en navigation privée).</p></div>`; return; }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(_){}
-  initSync();
+  initSync(); if (!sb) authReady = true;
   const qs = new URLSearchParams(location.search), shared = qs.get("url") || ((qs.get("text") || "").match(/https?:\/\/\S+/) || [])[0];
   if (shared) { history.replaceState(null, "", location.pathname + "#ajouter"); setTimeout(() => openUrlImport(shared), 300); }
   window.addEventListener("hashchange", route); route();
