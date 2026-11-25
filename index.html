@@ -705,6 +705,8 @@ function openBook(id, isNew){
     const tmp = { ...b, title: $("#f_title", el).value.trim() || b.title, authors: $("#f_authors", el).value.split(",").map(s => s.trim()).filter(Boolean), isbn: cleanIsbn($("#f_isbn", el).value) };
     const d = await findSummary(tmp); $("#sFind", el).disabled = false;
     if (d) { $("#f_summary", el).value = d; $("#sumPrev", el).textContent = d.slice(0, 90) + "…"; m.textContent = "Trouvé. Pense à enregistrer."; } else m.textContent = "Rien trouvé en ligne. Tu peux l'écrire toi-même."; };
+  const persistLoan = async () => { const st = S.books.find(x => x.id === b.id); if (!st) return;
+    st.loan = b.loan ? { ...b.loan } : null; st.loans = (b.loans || []).map(l => ({ ...l })); await saveBook(st); toast("Prêt enregistré"); };
   const renderLoan = () => {
     const a = $("#loanArea", el);
     if (b.loan) a.innerHTML = `<div class="loanbox"><div><b>Prêté à ${esc(b.loan.to)}</b> depuis le ${fmtDate(b.loan.date)}${b.loan.due ? `<br><span class="${isLate(b) ? "pill bad" : "small"}">Retour prévu le ${fmtDate(b.loan.due)}</span>` : ""}</div>
@@ -717,10 +719,10 @@ function openBook(id, isNew){
         <div class="row"><span class="small muted">Retour facultatif</span><span class="spacer"></span><button class="btn xs primary" id="lendBtn">Prêter</button></div></details>`;
     if ((b.loans || []).length) a.innerHTML += `<div class="small muted" style="margin-top:6px">Historique : ${b.loans.map(l => `${esc(l.to)} (${fmtDate(l.date)} → ${fmtDate(l.returnedAt)})`).join(" · ")}</div>`;
     const lb = $("#lendBtn", el); if (lb) lb.onclick = () => { const to = $("#l_to", el).value.trim(); if (!to) { $("#l_to", el).focus(); return; }
-      b.loan = { to, date: $("#l_date", el).value || today(), due: $("#l_due", el).value || "" }; renderLoan(); };
-    const d2 = $("#l_date2", el); if (d2) d2.onchange = () => { b.loan.date = d2.value || today(); renderLoan(); };
-    const u2 = $("#l_due2", el); if (u2) u2.onchange = () => { b.loan.due = u2.value || ""; renderLoan(); };
-    const rb = $("#retBtn", el); if (rb) rb.onclick = () => { b.loans = b.loans || []; b.loans.push({ ...b.loan, returnedAt: today() }); b.loan = null; renderLoan(); };
+      b.loan = { to, date: $("#l_date", el).value || today(), due: $("#l_due", el).value || "" }; renderLoan(); persistLoan(); };
+    const d2 = $("#l_date2", el); if (d2) d2.onchange = () => { b.loan.date = d2.value || today(); renderLoan(); persistLoan(); };
+    const u2 = $("#l_due2", el); if (u2) u2.onchange = () => { b.loan.due = u2.value || ""; renderLoan(); persistLoan(); };
+    const rb = $("#retBtn", el); if (rb) rb.onclick = () => { b.loans = b.loans || []; b.loans.push({ ...b.loan, returnedAt: today() }); b.loan = null; renderLoan(); persistLoan(); };
   };
   renderLoan();
   $("#saveBtn", el).onclick = async () => {
