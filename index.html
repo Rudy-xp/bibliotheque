@@ -66,6 +66,11 @@ nav.tabs a .dot{position:absolute;top:8px;right:calc(50% - 20px);min-width:18px;
 input[type=text],input[type=search],input[type=url],input[type=date],input[type=number],input[type=password],select,textarea{font-size:16px;
   width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 11px;min-height:40px}
 textarea{min-height:80px;resize:vertical}
+/* iOS : les champs date ont une largeur minimale native qui déborde de la grille */
+input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;height:44px;line-height:24px;text-align:left}
+input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type=date]::-webkit-calendar-picker-indicator{opacity:.6}
+.grid2 > *{min-width:0}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:0}
 label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);font-size:15px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -672,9 +677,9 @@ function openBook(id, isNew){
     if (b.loan) a.innerHTML = `<div class="loanbox"><div><b>Prêté à ${esc(b.loan.to)}</b> depuis le ${fmtDate(b.loan.date)}${b.loan.due ? `<br><span class="${isLate(b) ? "pill bad" : "small"}">Retour prévu le ${fmtDate(b.loan.due)}</span>` : ""}</div>
         <div class="row"><button class="btn sm primary" id="retBtn">Il me l'a rendu</button></div></div>`;
     else a.innerHTML = `<div class="loanbox free"><div class="row"><b class="small">Prêter ce livre</b></div>
-        <div class="grid2 stack"><input type="text" id="l_to" placeholder="À qui ?" list="dl_people"><input type="date" id="l_due" title="Retour prévu (facultatif)"></div>
+        <div class="grid2"><label class="f">À qui ?<input type="text" id="l_to" placeholder="Nom" list="dl_people"></label><label class="f">Retour prévu<input type="date" id="l_due"></label></div>
         <datalist id="dl_people">${[...new Set(S.books.flatMap(x => [x.loan && x.loan.to, ...(x.loans || []).map(l => l.to)]).filter(Boolean))].map(p => `<option value="${esc(p)}">`).join("")}</datalist>
-        <div class="row"><span class="small muted">Retour prévu facultatif</span><span class="spacer"></span><button class="btn sm" id="lendBtn">Prêter</button></div></div>`;
+        <div class="row"><span class="small muted">Date de retour facultative</span><span class="spacer"></span><button class="btn sm" id="lendBtn">Prêter</button></div></div>`;
     if ((b.loans || []).length) a.innerHTML += `<div class="small muted" style="margin-top:6px">Historique : ${b.loans.map(l => `${esc(l.to)} (${fmtDate(l.date)} → ${fmtDate(l.returnedAt)})`).join(" · ")}</div>`;
     const lb = $("#lendBtn", el); if (lb) lb.onclick = () => { const to = $("#l_to", el).value.trim(); if (!to) { $("#l_to", el).focus(); return; }
       b.loan = { to, date: today(), due: $("#l_due", el).value || "" }; renderLoan(); };
