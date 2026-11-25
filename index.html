@@ -440,8 +440,9 @@ async function findSummary(b){
     for (const d of (j.docs || [])) { const w = await getJSON(`https://openlibrary.org${d.key}.json`); const ds = olDesc(w); if (ok(ds)) return ds; } });
   tries.push(async () => { // Wikipédia FR : seulement si l'article parle bien d'un livre
     const j = await getJSON(`https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(titleQ + " " + author)}&srlimit=3&format=json&origin=*`);
-    for (const r of ((j.query || {}).search || [])) {
-      const p = await getJSON(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(r.title.replace(/ /g, "_"))}`);
+    const cands = [{ title: titleQ }, { title: titleQ + " (album)" }, { title: titleQ + " (roman)" }, ...((j.query || {}).search || [])];
+    for (const r of cands) {
+      let p; try { p = await getJSON(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(r.title.replace(/ /g, "_"))}`); } catch(_) { continue; }
       if (p.type === "standard" && /(roman|bande dessin|album|livre|essai|manga|recueil|nouvelle|conte|pi[eè]ce)/i.test((p.description || "") + " " + (p.extract || "").slice(0, 200))
         && norm(p.title).includes(norm(titleQ).split(" ").slice(0, 3).join(" "))) return p.extract + "\n(Source : Wikipédia)"; } });
   let other = "";
