@@ -402,7 +402,8 @@ async function lookupIsbn(isbn){
   if (!gv && !ov && !bv) return null;
   // Titre et éditeur : BnF (accents, édition française) ; auteurs : Open Library/Google ; couverture : Open Library
   const m = merge(gv, bv, ov);
-  if (bv && bv.title) m.title = bv.title;
+  if (bv && bv.title && (!ov || !ov.title || norm(ov.title) === norm(bv.title))) m.title = bv.title;
+  if (m.series && /^(hors collection|collection|poche|folio|j ai lu|livre de poche)/i.test(norm(m.series))) m.series = "";
   if (ov && ov.authors.length && !(gv && gv.authors.length)) m.authors = ov.authors;
   if (ov && ov.cover) m.cover = ov.cover;
   m.categories = [...(m.categories || []), ...((ov && ov.subjects) || [])];
