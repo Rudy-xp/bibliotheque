@@ -86,6 +86,15 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
 .toolbar .count{flex:none;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
 .toolbar select{flex:1 1 0;min-width:0;width:auto;min-height:30px;padding:3px 6px;font-size:13px}
 
+.selbar{position:fixed;left:0;right:0;bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px));z-index:31;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.08);
+  display:flex;gap:6px;align-items:center;padding:8px max(16px,env(safe-area-inset-left,0px));flex-wrap:wrap}
+.selbar b{font-size:14px}
+.selmode .book,.selmode .li{position:relative}
+.selmode [data-id]::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.25);box-shadow:0 0 0 1px rgba(0,0,0,.2);z-index:3}
+.selmode .li[data-id]::after{top:50%;left:10px;transform:translateY(-50%)}
+.selmode [data-id].sel::after{background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/14px no-repeat}
+.selmode [data-id].sel .cover{outline:3px solid var(--accent);outline-offset:1px}
+main.selmode{padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 100px)}
 .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:10px 8px}
 .book{cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:3px;border:0;background:none;padding:0;text-align:left}
 .cover{position:relative;aspect-ratio:2/3;width:100%;max-width:100%;border-radius:4px 8px 8px 4px;overflow:hidden;background:var(--surface2);
@@ -593,6 +602,7 @@ function allLists(){ const s = new Set(); S.books.forEach(b => (b.lists || []).f
 function viewLibrary(){
   const u = S.ui;
   setTop(`<div class="row"><h1>Ma bibliothèque</h1>
+      <button class="btn xs${SEL ? " primary" : ""}" id="selToggle">${SEL ? "Terminé" : "Sélectionner"}</button>
       <button class="iconbtn" id="viewToggle" aria-label="Changer l'affichage">${u.view === "grid"
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="7"/><rect x="14" y="4" width="6" height="7"/><rect x="4" y="13" width="6" height="7"/><rect x="14" y="13" width="6" height="7"/></svg>'}</button></div>
@@ -601,6 +611,7 @@ function viewLibrary(){
       .map(([k, l]) => `<button class="chip${u.filter === k ? " on" : ""}" data-f="${k}">${l}</button>`).join("")}</div>`);
   $("#q").oninput = e => { u.q = e.target.value; saveUi(); renderShelf(); };
   $("#chips").onclick = e => { const f = e.target.dataset.f; if (!f) return; u.filter = f; saveUi(); viewLibrary(); };
+  $("#selToggle").onclick = () => { SEL = SEL ? null : new Set(); viewLibrary(); };
   $("#viewToggle").onclick = () => { u.view = u.view === "grid" ? "list" : "grid"; saveUi(); viewLibrary(); };
   renderShelf();
 }
@@ -617,15 +628,61 @@ function renderShelf(){
       <select id="sortSel" aria-label="Trier">${[["added","Ajout récent"],["title","Titre"],["author","Auteur"],["series","Série / tome"],["acquired","Date d'acquisition"],["read","Date de lecture"],["year","Année de parution"],["rating","Note"],["type","Type"]]
         .map(([k, l]) => `<option value="${k}" ${u.sort === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     ${list.length ? (u.view === "grid"
-      ? `<div class="shelf">${list.map(b => `<button class="book" data-id="${b.id}">${coverHTML(b)}<span class="t">${esc(b.title)}</span><span class="a">${esc(authorsTxt(b))}</span></button>`).join("")}</div>`
-      : `<div class="list">${list.map(b => `<button class="li" data-id="${b.id}">${coverHTML(b)}<div class="body"><div class="t">${esc(b.title)}</div>
+      ? `<div class="shelf">${list.map(b => `<button class="book${SEL && SEL.has(b.id) ? " sel" : ""}" data-id="${b.id}">${coverHTML(b)}<span class="t">${esc(b.title)}</span><span class="a">${esc(authorsTxt(b))}</span></button>`).join("")}</div>`
+      : `<div class="list">${list.map(b => `<button class="li${SEL && SEL.has(b.id) ? " sel" : ""}" data-id="${b.id}">${coverHTML(b)}<div class="body"><div class="t">${esc(b.title)}</div>
           <div class="a">${esc(authorsTxt(b))}${b.series ? ` · ${esc(b.series)}${b.tome ? " T" + esc(b.tome) : ""}` : ""}</div>
           <div class="row" style="margin-top:4px;gap:4px">${b.loan ? `<span class="pill ${isLate(b) ? "bad" : "loan"}">Prêté à ${esc(b.loan.to)}</span>` : ""}${b.type ? `<span class="pill acc">${esc(b.type)}</span>` : ""}<span class="pill${b.status === "lu" ? " ok" : ""}">${STATUS[b.status] || ""}</span>${b.giftFrom ? `<span class="pill acc">Offert par ${esc(b.giftFrom)}</span>` : ""}</div></div></button>`).join("")}</div>`)
       : `<div class="empty"><p>Aucun livre ne correspond.</p></div>`}`;
   const ts = $("#typeSel"); if (ts) ts.onchange = e => { u.type = e.target.value; saveUi(); renderShelf(); };
   const ls = $("#listSel"); if (ls) ls.onchange = e => { u.list = e.target.value; saveUi(); renderShelf(); };
   $("#sortSel").onchange = e => { u.sort = e.target.value; saveUi(); renderShelf(); };
+  main.classList.toggle("selmode", !!SEL);
+  if (SEL) { const bar = document.createElement("div"); bar.className = "selbar"; main.appendChild(bar);
+    const ids = list.map(b => b.id); [...SEL].forEach(id => { if (!S.books.some(b => b.id === id)) SEL.delete(id); });
+    const paint = () => { const n = SEL.size, all = ids.length && ids.every(id => SEL.has(id));
+      bar.innerHTML = `<b>${n} sélectionné${n > 1 ? "s" : ""}</b><button class="btn xs" id="selAll">${all ? "Aucun" : "Tout"}</button><span class="spacer"></span>
+        <button class="btn xs primary" id="selEdit"${n ? "" : " disabled"}>Modifier</button><button class="btn xs danger" id="selDel"${n ? "" : " disabled"}>Supprimer</button>`;
+      $("#selAll", bar).onclick = () => { if (all) ids.forEach(id => SEL.delete(id)); else ids.forEach(id => SEL.add(id)); $$("[data-id]", main).forEach(e => e.classList.toggle("sel", SEL.has(e.dataset.id))); paint(); };
+      $("#selEdit", bar).onclick = () => openBulkEdit();
+      $("#selDel", bar).onclick = () => { bar.innerHTML = `<b>Supprimer ${n} livre${n > 1 ? "s" : ""} ?</b><span class="spacer"></span><button class="btn xs" id="dNo">Annuler</button><button class="btn xs danger" id="dYes">Supprimer</button>`;
+        $("#dNo", bar).onclick = paint;
+        $("#dYes", bar).onclick = async () => { for (const id of [...SEL]) await removeBook(id); toast(`${n} livre${n > 1 ? "s" : ""} supprimé${n > 1 ? "s" : ""}`); SEL = null; viewLibrary(); }; };
+    };
+    paint();
+    main.onclick = e => { const el = e.target.closest("[data-id]"); if (!el) return; const id = el.dataset.id;
+      if (SEL.has(id)) SEL.delete(id); else SEL.add(id); el.classList.toggle("sel", SEL.has(id)); paint(); };
+    return;
+  }
   main.onclick = e => { const el = e.target.closest("[data-id]"); if (el) openBook(el.dataset.id); };
+}
+var SEL = null;
+function openBulkEdit(){
+  const ids = [...SEL], n = ids.length, keep = `<option value="">— inchangé —</option>`;
+  const sh = sheet(`<div class="head sticky"><h2>Modifier ${n} livre${n > 1 ? "s" : ""}</h2><button class="btn sm primary" id="bApply">Appliquer</button><button class="iconbtn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="form">
+      <div class="small muted">Seuls les champs remplis sont modifiés.</div>
+      <div class="grid2"><label class="f">Statut<select id="bk_status">${keep}${Object.entries(STATUS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+        <label class="f">Type<select id="bk_type">${keep}${getTypes().map(t => `<option>${esc(t)}</option>`).join("")}<option value="__none">Aucun type</option></select></label></div>
+      <div class="grid2"><label class="f">Ajouter à la liste<input type="text" id="bk_addList" list="bk_dl" placeholder="Favoris…"></label>
+        <label class="f">Retirer de la liste<input type="text" id="bk_rmList" list="bk_dl"></label></div>
+      <datalist id="bk_dl">${allLists().map(l => `<option value="${esc(l)}">`).join("")}</datalist>
+      <div class="grid2"><label class="f">Emplacement<input type="text" id="bk_location"></label><label class="f">Offert par<input type="text" id="bk_giftFrom"></label></div>
+      <div class="grid2"><label class="f">Acquis le<input type="date" id="bk_acquiredAt"></label><label class="f">Lu le<input type="date" id="bk_readAt"></label></div>
+      <div class="grid2"><label class="f">Série<input type="text" id="bk_series" list="bk_dls"></label><label class="f">Note<select id="bk_rating">${keep}${[0,1,2,3,4,5].map(r => `<option value="${r}">${r ? "★".repeat(r) : "Aucune"}</option>`).join("")}</select></label></div>
+      <datalist id="bk_dls">${[...new Set(S.books.map(b => b.series).filter(Boolean))].map(x => `<option value="${esc(x)}">`).join("")}</datalist>
+    </div>`);
+  const el = sh.el, v = id => $("#" + id, el).value.trim();
+  $("#bApply", el).onclick = async () => {
+    const st = v("bk_status"), ty = v("bk_type"), al = v("bk_addList"), rl = v("bk_rmList"), loc = v("bk_location"), gf = v("bk_giftFrom"), aq = v("bk_acquiredAt"), rd = v("bk_readAt"), se = v("bk_series"), rt = v("bk_rating");
+    if (![st, ty, al, rl, loc, gf, aq, rd, se, rt].some(Boolean)) { toast("Rien à modifier"); return; }
+    for (const id of ids) { const b = S.books.find(x => x.id === id); if (!b) continue;
+      if (st) { b.status = st; if (st === "lu" && !b.readAt && !rd) b.readAt = today(); }
+      if (ty) b.type = ty === "__none" ? "" : ty;
+      if (al) b.lists = [...new Set([...(b.lists || []), al])];
+      if (rl) b.lists = (b.lists || []).filter(x => x !== rl);
+      if (loc) b.location = loc; if (gf) b.giftFrom = gf; if (aq) b.acquiredAt = aq; if (rd) b.readAt = rd; if (se) b.series = se; if (rt) b.rating = +rt;
+      await saveBook(b); }
+    sh.close(); toast(`${n} livre${n > 1 ? "s" : ""} modifié${n > 1 ? "s" : ""}`); SEL = null; viewLibrary(); };
 }
 
 /* ============ Fiche livre ============ */
