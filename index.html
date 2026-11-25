@@ -291,7 +291,10 @@ async function removeBook(id){ S.books = S.books.filter(b => b.id !== id); await
 async function saveSeries(s){ s.updatedAt = Date.now(); S.series[s.key] = s; await DB.put("series", s); scheduleSync(); }
 
 /* ============ Synchronisation entre appareils (Supabase) ============ */
-const SB_URL = "https://fpoxrpybabtgzravwyea.supabase.co", SB_KEY = "sb_publishable_u8lSGaQRPJ8e43AQtuH_pQ_LWHzYB1_";
+const SB_URL = "https://jhznhkpugkzrcgjhqwml.supabase.co", SB_KEY = "sb_publishable_blKBp2MP3MzeAL2L_XmW4Q_gvL1914x";
+const FN = SB_URL + "/functions/v1/", SIGNUP_READY = true, URL_IMPORT_READY = true;
+async function callFn(name, body){ const r = await fetch(FN + name, { method: "POST", headers: { "Content-Type": "application/json", apikey: SB_KEY }, body: JSON.stringify(body) });
+  let j = {}; try { j = await r.json(); } catch(_){} return { ok: r.ok, status: r.status, data: j }; }
 let sb = null, sbUser = null, syncT = null, syncing = false, syncState = "";
 function initSync(){
   if (!window.supabase || !window.supabase.createClient) return;
@@ -305,6 +308,7 @@ function initSync(){
 function scheduleSync(ms = 1500){ if (!sbUser) return; clearTimeout(syncT); syncT = setTimeout(syncNow, ms); }
 function setSyncState(t){ syncState = t; const el = $("#syncState"); if (el) el.textContent = t; }
 async function syncNow(){
+  if (S.settings.syncProject !== SB_URL) { await setSetting("syncProject", SB_URL); await setSetting("lastPull", ""); await setSetting("lastPush", 0); }
   if (!sb || !sbUser) return; if (syncing) { scheduleSync(); return; } syncing = true; setSyncState("Synchronisation…");
   try {
     const since = S.settings.lastPull || "1970-01-01T00:00:00Z"; let maxTs = since, changed = false;
@@ -692,6 +696,8 @@ function viewAdd(){
         <b>Photo du code-barres</b><span>Si la caméra en direct ne marche pas.</span></button>
       <button class="action" id="aShelf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16M8 6v14M12 4v16M17 5l3 15M3 20h18"/></svg>
         <b>Photo d'étagère</b><span>Lecture des tranches (OCR). Moins fiable, résultats à valider.</span></button>
+      <button class="action" id="aUrl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+        <b>Depuis un lien</b><span>Colle l'adresse d'une page Amazon, Wikipédia, Fnac, Babelio…</span></button>
       <button class="action" id="aManual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
         <b>Recherche / saisie</b><span>Par titre, auteur ou ISBN tapé à la main.</span></button>
     </div>
@@ -702,6 +708,7 @@ function viewAdd(){
   $("#aPhoto").onclick = () => $("#fileBarcode").click();
   $("#aShelf").onclick = () => $("#fileShelf").click();
   $("#aManual").onclick = () => openManual();
+  $("#aUrl").onclick = () => openUrlImport();
   renderPending(); renderSession();
 }
 function renderSession(){
@@ -769,6 +776,60 @@ $("#fileBarcode").onchange = async e => {
   } catch(_) { toast("Code-barres illisible. Rapproche-toi, bien net et éclairé."); }
   finally { try { q.clear(); } catch(_){} }
 };
+
+/* ---- Ajout depuis un lien ---- */
+function isbnFromUrl(u){
+  const m = u.match(/\/(?:dp|gp\/product|ASIN|product)\/([0-9]{9}[0-9X])(?:[\/?#]|$)/i); if (m) { const i = toIsbn13(m[1]); if (i) return i; }
+  const m2 = u.replace(/[-]/g, "").match(/(97[89]\d{10})/); if (m2 && validEan13(m2[1])) return m2[1];
+  return null;
+}
+function titleFromUrl(u){ try { const x = new URL(u); const seg = decodeURIComponent(x.pathname).split("/").filter(Boolean); const wi = seg.indexOf("wiki");
+  const s = wi >= 0 ? seg[wi + 1] : (seg.find(p => /[a-zà-ÿ]{3,}[-_][a-zà-ÿ]{3,}/i.test(p)) || "");
+  return s.replace(/\.html?$/, "").replace(/[_-]+/g, " ").replace(/\b\d{6,}\b/g, "").trim(); } catch(_) { return ""; } }
+async function importFromUrl(url){
+  let page = {};
+  if (URL_IMPORT_READY) { try { const r = await callFn("import-url", { url }); if (r.ok) page = r.data || {}; } catch(_){} }
+  if (page.blocked || page.status >= 400) page = { site: page.site };
+  if (/amazon\.|: Livres$/i.test(page.description || "") && (page.description || "").length < 200) page.description = "";
+  if (typeof page.title === "string" && /^[^a-zà-ÿ]*$/.test(page.title.split(":")[0])) { const t = page.title.split(" : ")[0]; page.title = t.charAt(0) + t.slice(1).toLowerCase(); }
+  if (!page.title && /wikipedia\.org\/wiki\//.test(url)) { try { const x = new URL(url); const lang = x.hostname.split(".")[0];
+    const p = await getJSON(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${x.pathname.slice(6)}`);
+    page = { title: p.title, description: p.extract, cover: (p.originalimage || p.thumbnail || {}).source || "", site: "wikipedia.org" }; } catch(_){} }
+  const isbn = toIsbn13(page.isbn || "") || isbnFromUrl(url);
+  let cat = null; if (isbn) { try { cat = await lookupIsbn(isbn); } catch(_){} }
+  if (!cat) { const t = page.title || titleFromUrl(url);
+    if (t) { const r = await searchText([t, (page.authors || [])[0]].filter(Boolean).join(" "), 4).catch(() => []);
+      const tn = norm(t); cat = r.find(m => { const mn = norm(m.title); return mn && (tn.startsWith(mn) || mn.startsWith(tn)); }) || (page.title ? null : r[0]) || null; } }
+  if (!cat && !page.title) return null;
+  const pg = { title: page.title, authors: page.authors || [], publisher: page.publisher, year: page.year, pages: page.pages, description: page.description, cover: safeUrl(page.cover), isbn: isbn || "" };
+  const m = merge(cat, pg);
+  if (pg.cover) m.cover = pg.cover;
+  if (!m.description && pg.description) m.description = pg.description;
+  m.source = [cat && cat.source, page.site].filter(Boolean).join(" + ") || "Lien";
+  return m;
+}
+function openUrlImport(prefill = ""){
+  const sh = sheet(`<div class="head"><h2>Ajouter depuis un lien</h2><button class="iconbtn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="form"><input type="url" id="uq" inputmode="url" placeholder="https://…" value="${esc(prefill)}" autocomplete="off">
+    <button class="btn primary" id="ugo">Importer le livre</button>
+    <div class="small muted" id="umsg">Fonctionne avec Amazon, Wikipédia, Fnac, Babelio, Decitre, sites d'éditeurs… Les infos et la couverture sont reprises de la page.</div></div>`);
+  const el = sh.el;
+  const go = async () => {
+    const url = $("#uq", el).value.trim(); const msg = $("#umsg", el);
+    if (!/^https?:\/\/\S+\.\S+/.test(url)) { msg.textContent = "Colle une adresse complète qui commence par https://"; return; }
+    $("#ugo", el).disabled = true; msg.textContent = "Lecture de la page…";
+    let m = null; try { m = await importFromUrl(url); } catch(_){}
+    $("#ugo", el).disabled = false;
+    if (!m) { msg.textContent = "Je n'ai pas réussi à lire cette page. Essaie la page Wikipédia ou Babelio du livre, ou la recherche par titre."; return; }
+    const dup = m.isbn && S.books.find(b => b.isbn === toIsbn13(m.isbn));
+    if (dup) { sh.close(); toast("Déjà dans ta bibliothèque", "Voir", () => openBook(dup.id)); return; }
+    const b = bookFromMeta(m); b.notes = b.notes || ""; b.sourceUrl = url; await saveBook(b);
+    if (!b.summary) enrich(b).catch(() => {});
+    session.push({ status: "added", book: b }); sh.close(); route(); openBook(b.id, true);
+  };
+  $("#ugo", el).onclick = go; $("#uq", el).onkeydown = e => { if (e.key === "Enter") go(); };
+  if (prefill) go(); else setTimeout(() => $("#uq", el).focus(), 50);
+}
 
 /* ---- Recherche / saisie manuelle ---- */
 function openManual(prefill = "", blank = false){
@@ -992,8 +1053,8 @@ function viewMore(){
         <div class="row"><button class="btn" id="syncBtn">Synchroniser maintenant</button><button class="btn ghost" id="outBtn">Se déconnecter</button></div>`
       : `<p class="small muted" style="margin:0">Connecte-toi pour retrouver ta bibliothèque sur ton Mac et tes autres appareils. Les livres déjà sur ce téléphone seront envoyés.</p>
         <input type="text" id="sbEmail" inputmode="email" autocomplete="email" placeholder="Email">
-        <input type="password" id="sbPass" autocomplete="current-password" placeholder="Mot de passe (6 caractères min.)">
-        <div class="row"><button class="btn primary" id="inBtn">Se connecter</button><span class="small muted">Création de compte bientôt disponible.</span></div>
+        <input type="password" id="sbPass" autocomplete="current-password" placeholder="Mot de passe (8 caractères min.)">
+        <div class="row"><button class="btn primary" id="inBtn">Se connecter</button>${SIGNUP_READY ? `<button class="btn" id="upBtn">Créer un compte</button>` : `<span class="small muted">Création de compte bientôt disponible.</span>`}</div>
         <div class="small muted" id="authMsg"></div>`}</div></div>
     <div class="stat"><div><b>${bs.length}</b><span>livres</span></div><div><b>${bs.filter(b => b.status === "lu").length}</b><span>lus</span></div>
       <div><b>${readY}</b><span>lus en ${y}</span></div><div><b>${bs.filter(b => b.status === "alire").length}</b><span>à lire</span></div>
@@ -1021,10 +1082,11 @@ function viewMore(){
     $("#inBtn").onclick = async () => { const c = creds(); if (!c.email || !c.password) return msg("Indique ton email et ton mot de passe."); msg("Connexion…");
       const { error } = await sb.auth.signInWithPassword(c);
       if (error) msg(/confirm/i.test(error.message) ? "Confirme d'abord ton email (lien reçu), puis reconnecte-toi." : "Email ou mot de passe incorrect."); };
-    if ($("#upBtn")) $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 6) return msg("Email et mot de passe de 6 caractères minimum."); msg("Création du compte…");
-      const { data, error } = await sb.auth.signUp({ ...c, options: { emailRedirectTo: location.origin + location.pathname } });
-      if (error) return msg(/registered|exists/i.test(error.message) ? "Ce compte existe déjà : clique sur « Se connecter »." : "Erreur : " + error.message);
-      msg(data.session ? "Compte créé, synchro en cours." : "Compte créé. Clique sur le lien reçu par email pour le confirmer, puis reviens ici et connecte-toi."); }; }
+    if ($("#upBtn")) $("#upBtn").onclick = async () => { const c = creds(); if (!c.email || c.password.length < 8) return msg("Indique un email et un mot de passe de 8 caractères minimum."); msg("Création du compte…");
+      let r; try { r = await callFn("signup", c); } catch(_) { return msg("Pas de connexion. Réessaie."); }
+      if (r.status === 409) return msg("Ce compte existe déjà : clique sur « Se connecter ».");
+      if (!r.ok) return msg((r.data && r.data.error) || "Création impossible pour le moment.");
+      msg("Compte créé, connexion…"); const { error } = await sb.auth.signInWithPassword(c); if (error) msg("Compte créé. Clique sur « Se connecter »."); }; }
   $("#fillBtn").onclick = async () => { const btn = $("#fillBtn"), msg = $("#fillMsg"); btn.disabled = true;
     const todo = S.books.filter(b => !b.summary || !b.type || (!b.cover && !b.coverData)); let n = 0, got = 0;
     for (const b0 of todo) { msg.textContent = `${++n} / ${todo.length} : ${b0.title}`;
@@ -1081,6 +1143,8 @@ function toast(msg, act, fn){ $$(".toast").forEach(t => t.remove()); const t = d
   try { await DB.open(); await loadAll(); } catch (e) { $("#main").innerHTML = `<div class="empty"><h2>Stockage indisponible</h2><p>Ouvre l'app dans un navigateur normal (pas en navigation privée).</p></div>`; return; }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(_){}
   initSync();
+  const qs = new URLSearchParams(location.search), shared = qs.get("url") || ((qs.get("text") || "").match(/https?:\/\/\S+/) || [])[0];
+  if (shared) { history.replaceState(null, "", location.pathname + "#ajouter"); setTimeout(() => openUrlImport(shared), 300); }
   window.addEventListener("hashchange", route); route();
   if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
