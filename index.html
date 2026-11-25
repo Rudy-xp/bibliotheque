@@ -257,7 +257,11 @@ function hashColor(s){ let h = 0; for (const c of String(s)) h = (h * 31 + c.cha
   return `hsl(${hue} ${30 + Math.abs(h >> 4) % 25}% ${28 + Math.abs(h >> 8) % 14}%)`; }
 const STATUS = {alire:"À lire", encours:"En cours", lu:"Lu", abandon:"Abandonné"};
 const TYPES = ["BD","Manga","Comics","Roman","Policier / Thriller","SF / Fantasy","Jeunesse","Essai","Documentaire","Biographie","Poésie","Théâtre","Pratique","Beau livre","Autre"];
-function guessType(m){
+const TYPES_KEY = "__types__";
+const getTypes = () => { const t = S.series[TYPES_KEY]; return (t && Array.isArray(t.types) && t.types.length) ? t.types : TYPES; };
+const saveTypes = types => saveSeries({ key: TYPES_KEY, name: TYPES_KEY, types });
+function guessType(m){ const t = guessTypeRaw(m); return getTypes().includes(t) ? t : ""; }
+function guessTypeRaw(m){
   const cat = norm([...(m.categories || []), ...(m.subjects || []).slice(0, 20)].join(" ")), pub = norm(m.publisher);
   if (/\b(kana|pika|ki oon|kurokawa|kaze|tonkam|akata|doki doki|delcourt tonkam|glenat manga|nobi nobi|meian)\b/.test(pub) || /\bmanga/.test(cat)) return "Manga";
   if (/\b(urban comics|panini|marvel|dc comics)\b/.test(pub) || /\b(superhero|super heros)\b/.test(cat)) return "Comics";
@@ -606,7 +610,7 @@ function renderShelf(){
       <p>Scanne le code-barres au dos d'un livre pour l'ajouter avec sa couverture.</p>
       <div class="btns"><a class="btn primary" href="#ajouter">Ajouter des livres</a><button class="btn" id="demo">Voir avec des exemples</button></div></div>`;
     $("#demo").onclick = loadDemo; return; }
-  const list = filtered(); const lists = allLists(); const types = TYPES.filter(t => S.books.some(b => b.type === t));
+  const list = filtered(); const lists = allLists(); const types = [...new Set([...getTypes(), ...S.books.map(b => b.type)])].filter(t => t && S.books.some(b => b.type === t));
   main.innerHTML = `<div class="toolbar"><span class="count">${list.length}${list.length !== S.books.length ? `/${S.books.length}` : ""}</span>
       ${types.length ? `<select id="typeSel" aria-label="Type"><option value="">Type</option>${types.map(t => `<option ${u.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>` : ""}
       ${lists.length ? `<select id="listSel" aria-label="Liste"><option value="">Liste</option>${lists.map(l => `<option ${u.list === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
@@ -647,7 +651,7 @@ function openBook(id, isNew){
       <div id="loanArea"></div>
       <div class="grid2"><label class="f">Statut<select id="f_status">${Object.entries(STATUS).map(([k, l]) => `<option value="${k}" ${b.status === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Lu le<input type="date" id="f_readAt" value="${esc(b.readAt)}"></label></div>
-      <div class="grid2"><label class="f">Type<select id="f_type"><option value="">Non précisé</option>${TYPES.map(t => `<option ${b.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+      <div class="grid2"><label class="f">Type<select id="f_type"><option value="">Non précisé</option>${[...getTypes(), ...(b.type && !getTypes().includes(b.type) ? [b.type] : [])].map(t => `<option ${b.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
         <label class="f">Acquis le<input type="date" id="f_acquiredAt" value="${esc(b.acquiredAt)}"></label></div>
       <div class="grid2"><label class="f">Offert par<input type="text" id="f_giftFrom" value="${esc(b.giftFrom)}" placeholder="Personne"></label>
         <label class="f">Emplacement<input type="text" id="f_location" value="${esc(b.location)}" placeholder="Salon, étagère 2"></label></div>
@@ -674,6 +678,19 @@ function openBook(id, isNew){
   $("#stars", el).onclick = e => { const n = +e.target.dataset.n; if (!n) return; b.rating = b.rating === n ? 0 : n; $$("#stars button", el).forEach((x, i) => x.classList.toggle("on", i < b.rating)); };
   $("#f_status", el).onchange = e => { if (e.target.value === "lu" && !$("#f_readAt", el).value) $("#f_readAt", el).value = today(); };
   const refreshCover = () => { const c = $(".detail-top .cover", el); if (c) c.outerHTML = coverHTML(b); };
+  const loads = u => new Promise(res => { const i = new Image(); i.onload = () => res(i.naturalWidth > 5); i.onerror = () => res(false); i.src = u; setTimeout(() => res(false), 8000); });
+  let coverP = null;
+  const applyCover = async inp => {
+    const raw = inp.value.trim(); if (raw === (b.cover || "")) return; if (!raw) { b.cover = ""; refreshCover(); return; }
+    if (!/^https?:\/\//i.test(raw)) { toast("Le lien doit commencer par https://"); return; }
+    let u = raw.replace(/^http:/i, "https:");
+    toast("Chargement de la couverture…");
+    if (!(await loads(u))) { // lien vers une page (Amazon, Babelio…) : on récupère l'image de la page
+      try { const r = await callFn("import-url", { url: raw }); const c = r.ok && safeUrl(r.data.cover); if (c && await loads(c)) u = c; else u = ""; } catch(_) { u = ""; } }
+    if (!u) { toast("Pas d'image à cette adresse. Copie le lien de l'image elle-même."); return; }
+    b.cover = u; b.coverData = ""; inp.value = u; refreshCover(); toast("Couverture mise à jour. Pense à enregistrer.");
+  };
+  $("#f_cover", el).onchange = e => { coverP = applyCover(e.target); };
   $("#cPhoto", el).onclick = () => { coverTarget = async file => { try { b.coverData = await photoToDataUrl(file); refreshCover(); toast("Couverture prise. Pense à enregistrer."); } catch(_) { toast("Photo illisible"); } }; $("#fileCover").click(); };
   $("#cFind", el).onclick = async () => { const box = $("#cPick", el); box.innerHTML = `<div class="small muted" style="margin-bottom:10px">Recherche de couvertures…</div>`;
     let items = []; try { items = await searchText([b.title.replace(/\s*[-–]\s*(tome|t\.?|n[°o])\s*\d+.*$/i, ""), (b.authors || [])[0]].filter(Boolean).join(" "), 12); } catch(_){}
@@ -700,10 +717,11 @@ function openBook(id, isNew){
   };
   renderLoan();
   $("#saveBtn", el).onclick = async () => {
+    if (coverP) await coverP; if ($("#f_cover", el).value.trim() !== (b.cover || "")) await applyCover($("#f_cover", el));
     const v = id => $("#" + id, el).value.trim();
     Object.assign(b, { type: v("f_type"), summary: $("#f_summary", el).value.trim(), status: v("f_status"), readAt: v("f_readAt"), acquiredAt: v("f_acquiredAt"), giftFrom: v("f_giftFrom"), location: v("f_location"), notes: $("#f_notes", el).value,
       lists: v("f_lists").split(",").map(s => s.trim()).filter(Boolean), title: v("f_title") || b.title, authors: v("f_authors").split(",").map(s => s.trim()).filter(Boolean),
-      series: v("f_series"), tome: v("f_tome") ? +v("f_tome") : "", publisher: v("f_publisher"), year: v("f_year"), isbn: cleanIsbn(v("f_isbn")), pages: v("f_pages"), cover: safeUrl(v("f_cover")) });
+      series: v("f_series"), tome: v("f_tome") ? +v("f_tome") : "", publisher: v("f_publisher"), year: v("f_year"), isbn: cleanIsbn(v("f_isbn")), pages: v("f_pages"), cover: b.cover });
     if (b.status === "lu" && !b.readAt) b.readAt = today();
     await saveBook(b); sh.close(); toast("Fiche enregistrée"); route();
   };
@@ -996,7 +1014,7 @@ function renderPending(){
 function seriesGroups(){
   const g = {};
   S.books.filter(b => b.series).forEach(b => { const k = seriesKey(b.series); (g[k] ||= { key: k, name: b.series, books: [] }).books.push(b); });
-  Object.values(S.series).forEach(s => { if (!g[s.key]) g[s.key] = { key: s.key, name: s.name, books: [] }; });
+  Object.values(S.series).forEach(s => { if (s.key.startsWith("__")) return; if (!g[s.key]) g[s.key] = { key: s.key, name: s.name, books: [] }; });
   return Object.values(g).map(x => { const meta = S.series[x.key] || {}; const owned = new Set(x.books.map(b => +b.tome).filter(Boolean));
     const total = meta.total || Math.max(0, ...owned, ...(meta.found || []).map(f => f.tome));
     const missing = total ? [...Array(total)].map((_, i) => i + 1).filter(n => !owned.has(n) && !(meta.notOwnedOk || []).includes(n)).length : 0;
@@ -1126,6 +1144,7 @@ function viewMore(){
     <div class="section"><h2>Listes</h2>${lists.length ? `<div class="chips" style="flex-wrap:wrap">${lists.map(l => `<button class="chip" data-list="${esc(l)}">${esc(l)} · ${bs.filter(b => (b.lists || []).includes(l)).length}</button>`).join("")}</div>`
       : `<p class="small muted">Ajoute des listes depuis la fiche d'un livre (champ « Listes »).</p>`}</div>
     ${Object.keys(givers).length ? `<div class="section"><h2>Offerts par</h2><div class="chips" style="flex-wrap:wrap">${Object.entries(givers).sort((a, b) => b[1] - a[1]).map(([g, n]) => `<button class="chip" data-giver="${esc(g)}">${esc(g)} · ${n}</button>`).join("")}</div></div>` : ""}
+    <div class="section"><details class="fold"><summary><b>Types de livres</b> <span class="muted">${getTypes().length} types, modifiables</span></summary><div class="form" id="typesCard"></div></details></div>
     <div class="section"><h2>Compléter les fiches</h2><div class="card form">
       <p class="small muted" style="margin:0">Cherche en ligne les résumés, types et couvertures qui manquent. ${bs.filter(b => !b.summary).length} sans résumé, ${bs.filter(b => !b.type).length} sans type.</p>
       <div class="row"><button class="btn primary" id="fillBtn">Compléter</button><span class="small muted" id="fillMsg"></span></div></div></div>
@@ -1151,6 +1170,7 @@ function viewMore(){
       if (r.status === 409) return msg("Ce compte existe déjà : clique sur « Se connecter ».");
       if (!r.ok) return msg((r.data && r.data.error) || "Création impossible pour le moment.");
       msg("Compte créé, connexion…"); const { error } = await sb.auth.signInWithPassword(c); if (error) msg("Compte créé. Clique sur « Se connecter »."); }; }
+  renderTypes();
   $("#fillBtn").onclick = async () => { const btn = $("#fillBtn"), msg = $("#fillMsg"); btn.disabled = true;
     const todo = S.books.filter(b => !b.summary || !b.type || (!b.cover && !b.coverData)); let n = 0, got = 0;
     for (const b0 of todo) { msg.textContent = `${++n} / ${todo.length} : ${b0.title}`;
@@ -1178,6 +1198,27 @@ $("#fileImport").onchange = async e => { const f = e.target.files[0]; e.target.v
     for (const b of (j.books || [])) { if (b && b.id && b.title) { const ex = S.books.find(x => x.id === b.id); if (!ex || (b.updatedAt || 0) >= (ex.updatedAt || 0)) { b.cover = safeUrl(b.cover); await saveBook(b); n++; } } }
     for (const s of (j.series || [])) if (s && s.key) await saveSeries(s);
     toast(`${n} livres importés`); route(); } catch(_) { toast("Fichier illisible"); } };
+
+function renderTypes(){
+  const box = $("#typesCard"); if (!box) return; const types = getTypes();
+  const count = t => S.books.filter(b => b.type === t).length;
+  box.innerHTML = `<div class="small muted">Modifie un nom pour renommer le type : les livres suivent.</div>
+    ${types.map((t, i) => `<div class="row" style="flex-wrap:nowrap;gap:6px"><input type="text" data-ti="${i}" value="${esc(t)}" aria-label="Type ${esc(t)}"><span class="small muted" style="flex:none;min-width:24px;text-align:right">${count(t)}</span><button class="iconbtn" data-rm="${i}" aria-label="Retirer ${esc(t)}">✕</button></div>`).join("")}
+    <div class="row" style="flex-wrap:nowrap;gap:6px"><input type="text" id="newType" placeholder="Nouveau type"><button class="btn sm" id="addType">Ajouter</button></div>
+    <div id="typeConfirm"></div>`;
+  const save = async (list, rename) => { await saveTypes(list);
+    if (rename) for (const b of S.books.filter(x => x.type === rename[0])) { b.type = rename[1]; await saveBook(b); }
+    renderTypes(); };
+  $$("[data-ti]", box).forEach(inp => inp.onchange = async () => { const i = +inp.dataset.ti, old = types[i], nv = inp.value.trim();
+    if (!nv || nv === old) { inp.value = old; return; } if (types.includes(nv)) { toast("Ce type existe déjà"); inp.value = old; return; }
+    const l = types.slice(); l[i] = nv; await save(l, [old, nv]); toast(`« ${old} » renommé en « ${nv} »`); });
+  $$("[data-rm]", box).forEach(btn => btn.onclick = () => { const i = +btn.dataset.rm, t = types[i], n = count(t);
+    $("#typeConfirm", box).innerHTML = `<div class="confirm"><span>Retirer « ${esc(t)} »${n ? ` ? ${n} livre${n > 1 ? "s" : ""} n'auront plus de type` : " ?"}</span><span class="spacer"></span><button class="btn xs" id="tNo">Annuler</button><button class="btn xs danger" id="tYes">Retirer</button></div>`;
+    $("#tNo", box).onclick = () => { $("#typeConfirm", box).innerHTML = ""; };
+    $("#tYes", box).onclick = async () => { await save(types.filter((_, k) => k !== i), [t, ""]); }; });
+  const add = async () => { const nv = $("#newType", box).value.trim(); if (!nv) return; if (types.includes(nv)) return toast("Ce type existe déjà"); await save([...types, nv]); };
+  $("#addType", box).onclick = add; $("#newType", box).onkeydown = e => { if (e.key === "Enter") add(); };
+}
 
 /* ============ Démo ============ */
 async function loadDemo(){
