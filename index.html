@@ -633,8 +633,10 @@ function sheet(html, onClose){
   const bg = document.createElement("div"); bg.className = "sheet-bg";
   bg.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
   const close = () => { bg.remove(); onClose && onClose(); };
-  bg.addEventListener("click", e => { if (e.target === bg || e.target.closest("[data-close]")) close(); });
-  $("#layer").appendChild(bg); return { el: bg.firstElementChild, close };
+  const api = { el: bg.firstElementChild, close, beforeClose: null };
+  bg.addEventListener("click", async e => { if (e.target === bg || e.target.closest("[data-close]")) {
+    if (api.beforeClose) { try { if (await api.beforeClose() === false) return; } catch (err) { console.error(err); } } close(); } });
+  $("#layer").appendChild(bg); return api;
 }
 function openBook(id, isNew){
   const b0 = S.books.find(x => x.id === id); if (!b0) return;
@@ -725,15 +727,20 @@ function openBook(id, isNew){
     const rb = $("#retBtn", el); if (rb) rb.onclick = () => { b.loans = b.loans || []; b.loans.push({ ...b.loan, returnedAt: today() }); b.loan = null; renderLoan(); persistLoan(); };
   };
   renderLoan();
-  $("#saveBtn", el).onclick = async () => {
+  let saving = false;
+  const snap = () => JSON.stringify([...$$("input,textarea,select", el)].filter(i => i.id && !i.closest("#loanArea")).map(i => i.value).concat([b.cover || "", b.coverData || ""]));
+  let snap0 = snap(); const dirtyNow = () => snap() !== snap0;
+  const doSave = async () => {
     if (coverP) await coverP; if ($("#f_cover", el).value.trim() !== (b.cover || "")) await applyCover($("#f_cover", el));
     const v = id => $("#" + id, el).value.trim();
     Object.assign(b, { type: v("f_type"), summary: $("#f_summary", el).value.trim(), status: v("f_status"), readAt: v("f_readAt"), acquiredAt: v("f_acquiredAt"), giftFrom: v("f_giftFrom"), location: v("f_location"), notes: $("#f_notes", el).value,
       lists: v("f_lists").split(",").map(s => s.trim()).filter(Boolean), title: v("f_title") || b.title, authors: v("f_authors").split(",").map(s => s.trim()).filter(Boolean),
       series: v("f_series"), tome: v("f_tome") ? +v("f_tome") : "", publisher: v("f_publisher"), year: v("f_year"), isbn: cleanIsbn(v("f_isbn")), pages: v("f_pages"), cover: b.cover });
     if (b.status === "lu" && !b.readAt) b.readAt = today();
-    await saveBook(b); sh.close(); toast("Fiche enregistrée"); route();
+    await saveBook(b); snap0 = snap();
   };
+  sh.beforeClose = async () => { if (saving || !dirtyNow()) return; saving = true; await doSave(); toast("Modifications enregistrées"); route(); };
+  $("#saveBtn", el).onclick = async () => { saving = true; await doSave(); sh.close(); toast("Fiche enregistrée"); route(); };
   $("#delBtn", el).onclick = () => { $("#delConfirm", el).innerHTML = `<div class="confirm"><span>Supprimer « ${esc(b.title)} » ?</span><span class="spacer"></span><button class="btn sm" id="noDel">Annuler</button><button class="btn sm danger" id="yesDel">Supprimer</button></div>`;
     $("#noDel", el).onclick = () => $("#delConfirm", el).innerHTML = "";
     $("#yesDel", el).onclick = async () => { await removeBook(b.id); sh.close(); toast("Livre supprimé"); route(); }; };
