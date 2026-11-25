@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
       },
     });
     clearTimeout(t);
+    if (/^image\//i.test(r.headers.get("content-type") || "")) { try { await r.body?.cancel(); } catch { /* */ } return json({ ...out, cover: target.href.replace(/^http:/, "https:"), isImage: true }); }
     const reader = r.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
     while (reader) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); size += value.length; if (size > 3_000_000) { reader.cancel(); break; } }
     const all = new Uint8Array(size); let off = 0; for (const c of chunks) { all.set(c.subarray(0, Math.min(c.length, size - off)), off); off += c.length; if (off >= size) break; }
