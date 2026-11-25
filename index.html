@@ -708,14 +708,18 @@ function openBook(id, isNew){
   const renderLoan = () => {
     const a = $("#loanArea", el);
     if (b.loan) a.innerHTML = `<div class="loanbox"><div><b>Prêté à ${esc(b.loan.to)}</b> depuis le ${fmtDate(b.loan.date)}${b.loan.due ? `<br><span class="${isLate(b) ? "pill bad" : "small"}">Retour prévu le ${fmtDate(b.loan.due)}</span>` : ""}</div>
+        <div class="grid2"><label class="f">Date du prêt<input type="date" id="l_date2" value="${esc(b.loan.date || "")}"></label><label class="f">Retour prévu<input type="date" id="l_due2" value="${esc(b.loan.due || "")}"></label></div>
         <div class="row"><button class="btn xs primary" id="retBtn">Il me l'a rendu</button></div></div>`;
     else a.innerHTML = `<details class="fold"><summary><b>Prêter ce livre</b></summary>
-        <div class="grid2"><label class="f">À qui ?<input type="text" id="l_to" placeholder="Nom" list="dl_people"></label><label class="f">Retour prévu<input type="date" id="l_due"></label></div>
+        <label class="f">À qui ?<input type="text" id="l_to" placeholder="Nom" list="dl_people"></label>
+        <div class="grid2"><label class="f">Date du prêt<input type="date" id="l_date" value="${today()}"></label><label class="f">Retour prévu<input type="date" id="l_due"></label></div>
         <datalist id="dl_people">${[...new Set(S.books.flatMap(x => [x.loan && x.loan.to, ...(x.loans || []).map(l => l.to)]).filter(Boolean))].map(p => `<option value="${esc(p)}">`).join("")}</datalist>
         <div class="row"><span class="small muted">Retour facultatif</span><span class="spacer"></span><button class="btn xs primary" id="lendBtn">Prêter</button></div></details>`;
     if ((b.loans || []).length) a.innerHTML += `<div class="small muted" style="margin-top:6px">Historique : ${b.loans.map(l => `${esc(l.to)} (${fmtDate(l.date)} → ${fmtDate(l.returnedAt)})`).join(" · ")}</div>`;
     const lb = $("#lendBtn", el); if (lb) lb.onclick = () => { const to = $("#l_to", el).value.trim(); if (!to) { $("#l_to", el).focus(); return; }
-      b.loan = { to, date: today(), due: $("#l_due", el).value || "" }; renderLoan(); };
+      b.loan = { to, date: $("#l_date", el).value || today(), due: $("#l_due", el).value || "" }; renderLoan(); };
+    const d2 = $("#l_date2", el); if (d2) d2.onchange = () => { b.loan.date = d2.value || today(); renderLoan(); };
+    const u2 = $("#l_due2", el); if (u2) u2.onchange = () => { b.loan.due = u2.value || ""; renderLoan(); };
     const rb = $("#retBtn", el); if (rb) rb.onclick = () => { b.loans = b.loans || []; b.loans.push({ ...b.loan, returnedAt: today() }); b.loan = null; renderLoan(); };
   };
   renderLoan();
