@@ -388,7 +388,7 @@ async function fromBnF(isbn){
   const x = new DOMParser().parseFromString(txt, "text/xml");
   const get = n => [...x.getElementsByTagNameNS("*", n)].map(e => e.textContent.trim());
   const t = get("title")[0]; if (!t) return null;
-  const title = t.split(" / ")[0].replace(/\s*\[[^\]]*\]\s*/g, " ").replace(/\s+:\s*$/, "").trim();
+  const title = t.split(/\s+\/\s+|\s*\(|\s*\[|\s+(?:texte|textes|scénario|dessins?|ill\.|illustrations?|trad\.)\s/i)[0].replace(/\s*[:;,.]\s*$/, "").trim();
   const flip = a => { const n = a.replace(/\s*\(.*?\)\s*/g, " ").replace(/\.\s+[A-ZÉ][a-zé]+.*$/, "").replace(/\.$/, "").trim(); const p = n.split(/,\s*/); return p.length === 2 ? `${p[1]} ${p[0]}` : n; };
   return { source:"BnF", title, authors: get("creator").map(flip).filter(Boolean).slice(0, 3),
     description: get("description").join(" "), publisher: (get("publisher")[0] || "").replace(/\s*\(.*\)/, ""), year: ((get("date")[0] || "").match(/\d{4}/) || [""])[0], isbn, cover: "" }; }
@@ -396,7 +396,9 @@ function merge(...rs){ const out = {}; for (const r of rs.filter(Boolean)) for (
   if (out[k] === undefined || out[k] === "" || (Array.isArray(out[k]) && !out[k].length)) out[k] = v; } return out; }
 async function lookupIsbn(isbn){
   const [g, o, bn] = await Promise.allSettled([fromGoogle(isbn), fromOpenLibrary(isbn), fromBnF(isbn)]);
-  const gv = g.status === "fulfilled" ? g.value : null, ov = o.status === "fulfilled" ? o.value : null, bv = bn.status === "fulfilled" ? bn.value : null;
+  const gv = g.status === "fulfilled" ? g.value : null, bv = bn.status === "fulfilled" ? bn.value : null;
+  let ov = o.status === "fulfilled" ? o.value : null;
+  if (!ov && !(o.reason && /404/.test(String(o.reason.message)))) { try { ov = await fromOpenLibrary(isbn); } catch(_){} }
   if (!gv && !ov && !bv) return null;
   // Titre et éditeur : BnF (accents, édition française) ; auteurs : Open Library/Google ; couverture : Open Library
   const m = merge(gv, bv, ov);
