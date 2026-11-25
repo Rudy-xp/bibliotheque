@@ -20,7 +20,7 @@
   --loan:#a8701c; --loan-soft:#f4e6cc; --bad:#b3362c; --bad-soft:#f6dcd8; --ok:#2d7a4f; --ok-soft:#d8eedf;
   --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
   --body:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --r:12px; --tab-h:64px;
+  --r:12px; --tab-h:56px;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root{
@@ -40,17 +40,17 @@ a{color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 header.top{position:sticky;top:0;z-index:20;background:var(--bg);
-  padding:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));
+  padding:calc(env(safe-area-inset-top,0px) + 8px) max(16px,env(safe-area-inset-right,0px)) 6px max(16px,env(safe-area-inset-left,0px));
   border-bottom:1px solid var(--line)}
 header.top .row{display:flex;align-items:center;gap:10px}
-header.top h1{font-size:22px;flex:1}
-main{padding:12px max(16px,env(safe-area-inset-right,0px)) calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 24px) max(16px,env(safe-area-inset-left,0px));max-width:980px;margin:0 auto}
+header.top h1{font-size:20px;flex:1}
+main{padding:8px max(16px,env(safe-area-inset-right,0px)) calc(var(--tab-h) + env(safe-area-inset-bottom,0px) + 24px) max(16px,env(safe-area-inset-left,0px));max-width:980px;margin:0 auto}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--surface);border-top:1px solid var(--line);
   padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
-nav.tabs a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:var(--tab-h);
+nav.tabs a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;height:var(--tab-h);
   text-decoration:none;color:var(--muted);font-size:11px;font-weight:500;position:relative}
-nav.tabs a svg{width:24px;height:24px}
+nav.tabs a svg{width:22px;height:22px}
 nav.tabs a.on{color:var(--accent)}
 nav.tabs a .dot{position:absolute;top:8px;right:calc(50% - 20px);min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 
@@ -59,51 +59,52 @@ nav.tabs a .dot{position:absolute;top:8px;right:calc(50% - 20px);min-width:18px;
 .btn.ghost{background:transparent;border-color:transparent}
 .btn.danger{color:var(--bad);border-color:var(--bad-soft)}
 .btn.sm{min-height:32px;padding:5px 10px;font-size:13px}
+.btn.xs{min-height:28px;padding:3px 9px;font-size:12.5px;border-radius:8px}
 .btn:disabled{opacity:.5}
 .iconbtn{border:0;background:transparent;width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink)}
 .iconbtn svg{width:22px;height:22px}
 
 input[type=text],input[type=search],input[type=url],input[type=date],input[type=number],input[type=password],select,textarea{font-size:16px;
-  width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 11px;min-height:40px}
-textarea{min-height:80px;resize:vertical}
+  width:100%;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:6px 10px;min-height:38px}
+textarea{min-height:60px;resize:vertical}
 /* iOS : les champs date ont une largeur minimale native qui déborde de la grille */
-input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;height:44px;line-height:24px;text-align:left}
+input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;height:38px;line-height:24px;text-align:left}
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
 input[type=date]::-webkit-calendar-picker-indicator{opacity:.6}
 .grid2 > *{min-width:0}
-label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:0}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:0}
 label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);font-size:15px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 @media (max-width:420px){.grid2.stack{grid-template-columns:1fr}}
 
-.search{display:flex;gap:8px;margin-top:10px}
-.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.search{display:flex;gap:8px;margin-top:6px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:6px 0 0;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer;white-space:nowrap}
 .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.toolbar{display:flex;gap:8px;align-items:center;margin:8px 0 12px;flex-wrap:wrap}
-.toolbar .count{flex:1;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
-.toolbar select{width:auto;min-height:34px;padding:5px 8px;font-size:13px}
+.toolbar{display:flex;gap:6px;align-items:center;margin:4px 0 10px;flex-wrap:nowrap}
+.toolbar .count{flex:none;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.toolbar select{flex:1 1 0;min-width:0;width:auto;min-height:30px;padding:3px 6px;font-size:13px}
 
-.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:16px 12px}
-.book{cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:6px;border:0;background:none;padding:0;text-align:left}
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:10px 8px}
+.book{cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:3px;border:0;background:none;padding:0;text-align:left}
 .cover{position:relative;aspect-ratio:2/3;width:100%;max-width:100%;border-radius:4px 8px 8px 4px;overflow:hidden;background:var(--surface2);
   box-shadow:0 1px 2px rgba(0,0,0,.15),inset 3px 0 0 rgba(0,0,0,.12)}
 .cover img{position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover;display:block}
 .gen{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:10px 8px 10px 12px;color:#fff;font-family:var(--display);
   background:linear-gradient(90deg,rgba(0,0,0,.25) 0 5px,transparent 5px),var(--c,#3c5a52)}
-.gen b{font-size:13px;line-height:1.15;font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical}
+.gen b{font-size:11px;line-height:1.15;font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical}
 .gen small{font-family:var(--body);font-size:10px;opacity:.85;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .badge{position:absolute;z-index:2;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;letter-spacing:.02em}
 .badge.tome{top:6px;right:6px;background:rgba(0,0,0,.72);color:#fff}
 .badge.loan{bottom:6px;left:8px;background:var(--loan);color:#fff}
 .badge.read{bottom:6px;right:6px;background:var(--ok);color:#fff}
-.book .t{font-weight:600;font-size:13px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.book .a{font-size:12px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.book .t{font-weight:600;font-size:12px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.book .a{font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
 .list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
-.li{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer;min-width:0;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
-.li .cover{width:46px;flex:none}
+.li{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer;min-width:0;background:none;border-left:0;border-right:0;border-top:0;text-align:left;width:100%}
+.li .cover{width:38px;flex:none}
 .li .gen b{font-size:7px}.li .gen small{display:none}
 .li .badge,.cand .badge,.series-row .badge,.tome .badge{display:none}
 .vh{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0}
@@ -120,15 +121,15 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
 .empty h2{color:var(--ink);font-size:20px;margin-bottom:6px}
 .empty .btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px}
 
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.action{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px;cursor:pointer;min-width:0}
-.action svg{width:28px;height:28px;color:var(--accent)}
-.action b{font-family:var(--display);font-size:16px}
-.action span{font-size:12.5px;color:var(--muted)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.action{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:10px 12px;cursor:pointer;min-width:0}
+.action svg{width:22px;height:22px;color:var(--accent)}
+.action b{font-family:var(--display);font-size:15px}
+.action span{font-size:12px;line-height:1.3;color:var(--muted)}
 .action.main{grid-column:1/-1;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .action.main svg,.action.main span{color:var(--accent-ink)}
 .action.main span{opacity:.85}
-.section{margin-top:22px}
+.section{margin-top:16px}
 .section > h2{font-size:17px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
 .muted{color:var(--muted)}
@@ -140,17 +141,27 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 @media (min-width:700px){.sheet-bg{align-items:center}.sheet{border-radius:18px;max-height:88vh}}
 .sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 10px}
-.sheet .head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.sheet .head h2{flex:1;font-size:19px}
-.form{display:flex;flex-direction:column;gap:12px}
-.detail-top{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px}
-.detail-top .cover{width:110px;flex:none}
-.detail-top .meta{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
-.detail-top h3{font-size:19px;line-height:1.2}
+.sheet .head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sheet .head h2{flex:1;font-size:18px}
+.form{display:flex;flex-direction:column;gap:9px}
+details.fold{border:1px solid var(--line);border-radius:10px;padding:0 10px;background:var(--surface)}
+details.fold > summary{cursor:pointer;padding:9px 0;font-size:14px;list-style:none;display:flex;gap:8px;align-items:baseline;min-width:0}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary::after{content:"›";margin-left:auto;color:var(--muted);transition:transform .15s}
+details.fold[open] > summary::after{transform:rotate(90deg)}
+details.fold > summary span{font-size:12.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;flex:1}
+details.fold[open] > summary span{display:none}
+details.fold > :not(summary){margin-bottom:10px}
+details.fold .row{margin-top:6px}
+.sheet .head.sticky{position:sticky;top:-8px;z-index:3;background:var(--bg);padding:8px 0;margin:-8px 0 8px}
+.detail-top{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.detail-top .cover{width:84px;flex:none}
+.detail-top .meta{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px}
+.detail-top h3{font-size:17px;line-height:1.2}
 .stars{display:flex;gap:2px}
-.stars button{border:0;background:none;font-size:24px;line-height:1;cursor:pointer;color:var(--line);padding:2px}
+.stars button{border:0;background:none;font-size:21px;line-height:1;cursor:pointer;color:var(--line);padding:1px 2px}
 .stars button.on{color:#d9a21b}
-.loanbox{border-radius:var(--r);padding:12px;background:var(--loan-soft);display:flex;flex-direction:column;gap:8px}
+.loanbox{border-radius:var(--r);padding:10px;background:var(--loan-soft);display:flex;flex-direction:column;gap:8px}
 .loanbox.free{background:var(--surface2)}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .spacer{flex:1}
@@ -200,9 +211,9 @@ label.f > *{text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink
 .toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 12px);z-index:80;background:var(--ink);color:var(--bg);
   padding:10px 14px;border-radius:10px;font-size:14px;display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .toast button{background:none;border:0;color:var(--accent-soft);font-weight:700;cursor:pointer}
-.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
-.stat div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
-.stat b{display:block;font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums}
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.stat div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.stat b{display:block;font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
 .stat span{font-size:12px;color:var(--muted)}
 .summary{font-size:14px;line-height:1.55;white-space:pre-wrap}
 .coverpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px}
@@ -596,9 +607,9 @@ function renderShelf(){
       <div class="btns"><a class="btn primary" href="#ajouter">Ajouter des livres</a><button class="btn" id="demo">Voir avec des exemples</button></div></div>`;
     $("#demo").onclick = loadDemo; return; }
   const list = filtered(); const lists = allLists(); const types = TYPES.filter(t => S.books.some(b => b.type === t));
-  main.innerHTML = `<div class="toolbar"><span class="count">${list.length} livre${list.length > 1 ? "s" : ""}${list.length !== S.books.length ? ` sur ${S.books.length}` : ""}</span>
-      ${types.length ? `<select id="typeSel" aria-label="Type"><option value="">Tous les types</option>${types.map(t => `<option ${u.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>` : ""}
-      ${lists.length ? `<select id="listSel" aria-label="Liste"><option value="">Toutes les listes</option>${lists.map(l => `<option ${u.list === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
+  main.innerHTML = `<div class="toolbar"><span class="count">${list.length}${list.length !== S.books.length ? `/${S.books.length}` : ""}</span>
+      ${types.length ? `<select id="typeSel" aria-label="Type"><option value="">Type</option>${types.map(t => `<option ${u.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>` : ""}
+      ${lists.length ? `<select id="listSel" aria-label="Liste"><option value="">Liste</option>${lists.map(l => `<option ${u.list === l ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>` : ""}
       <select id="sortSel" aria-label="Trier">${[["added","Ajout récent"],["title","Titre"],["author","Auteur"],["series","Série / tome"],["acquired","Date d'acquisition"],["read","Date de lecture"],["year","Année de parution"],["rating","Note"],["type","Type"]]
         .map(([k, l]) => `<option value="${k}" ${u.sort === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     ${list.length ? (u.view === "grid"
@@ -624,28 +635,30 @@ function sheet(html, onClose){
 function openBook(id, isNew){
   const b0 = S.books.find(x => x.id === id); if (!b0) return;
   const b = JSON.parse(JSON.stringify(b0));
-  const sh = sheet(`<div class="head"><h2>${isNew ? "Nouveau livre" : "Fiche du livre"}</h2><button class="iconbtn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="detail-top">${coverHTML(b)}<div class="meta"><h3>${esc(b.title)}</h3><div class="muted">${esc(authorsTxt(b))}</div>
+  const sumPrev = b.summary ? esc(b.summary.slice(0, 90)) + (b.summary.length > 90 ? "…" : "") : "Aucun";
+  const sh = sheet(`<div class="head sticky"><h2>${isNew ? "Nouveau livre" : "Fiche"}</h2><button class="btn sm primary" id="saveBtn">Enregistrer</button><button class="iconbtn" data-close aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="detail-top">${coverHTML(b)}<div class="meta"><h3>${esc(b.title)}</h3><div class="muted small">${esc(authorsTxt(b))}</div>
       <div class="small muted">${[b.publisher, b.year, b.pages && b.pages + " p."].filter(Boolean).map(esc).join(" · ")}</div>
       <div class="stars" id="stars">${[1,2,3,4,5].map(n => `<button data-n="${n}" class="${n <= b.rating ? "on" : ""}" aria-label="${n} étoile${n > 1 ? "s" : ""}">★</button>`).join("")}</div>
-      <div class="row" style="gap:6px"><button class="btn sm" id="cPhoto">Photo de couverture</button><button class="btn sm" id="cFind">Autre couverture</button></div>
-      ${b.series ? `<a class="small" href="#serie--${encodeURIComponent(seriesKey(b.series))}" data-close>Voir la série ${esc(b.series)} →</a>` : ""}</div></div>
+      <div class="row" style="gap:4px"><button class="btn xs" id="cPhoto">Photo couverture</button><button class="btn xs" id="cFind">Autre couverture</button></div>
+      ${b.series ? `<a class="small" href="#serie--${encodeURIComponent(seriesKey(b.series))}" data-close>Série ${esc(b.series)} →</a>` : ""}</div></div>
     <div id="cPick"></div>
     <div class="form" id="bf">
       <div id="loanArea"></div>
-      <label class="f">Type<select id="f_type"><option value="">Non précisé</option>${TYPES.map(t => `<option ${b.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
-      <label class="f">Résumé<textarea id="f_summary" rows="6" placeholder="Pas encore de résumé">${esc(b.summary || "")}</textarea></label>
-      <div class="row" style="margin-top:-4px"><button class="btn sm" id="sFind">Chercher le résumé en ligne</button><span class="small muted" id="sMsg"></span></div>
       <div class="grid2"><label class="f">Statut<select id="f_status">${Object.entries(STATUS).map(([k, l]) => `<option value="${k}" ${b.status === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="f">Lu le<input type="date" id="f_readAt" value="${esc(b.readAt)}"></label></div>
-      <div class="grid2"><label class="f">Acquis le<input type="date" id="f_acquiredAt" value="${esc(b.acquiredAt)}"></label>
-        <label class="f">Offert par<input type="text" id="f_giftFrom" value="${esc(b.giftFrom)}" placeholder="Personne"></label></div>
-      <label class="f">Listes (séparées par des virgules)<input type="text" id="f_lists" value="${esc((b.lists || []).join(", "))}" list="dl_lists" placeholder="Favoris, À relire, Salon…"></label>
+      <div class="grid2"><label class="f">Type<select id="f_type"><option value="">Non précisé</option>${TYPES.map(t => `<option ${b.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+        <label class="f">Acquis le<input type="date" id="f_acquiredAt" value="${esc(b.acquiredAt)}"></label></div>
+      <div class="grid2"><label class="f">Offert par<input type="text" id="f_giftFrom" value="${esc(b.giftFrom)}" placeholder="Personne"></label>
+        <label class="f">Emplacement<input type="text" id="f_location" value="${esc(b.location)}" placeholder="Salon, étagère 2"></label></div>
+      <label class="f">Listes<input type="text" id="f_lists" value="${esc((b.lists || []).join(", "))}" list="dl_lists" placeholder="Favoris, À relire… (séparées par des virgules)"></label>
       <datalist id="dl_lists">${allLists().map(l => `<option value="${esc(l)}">`).join("")}</datalist>
-      <label class="f">Emplacement<input type="text" id="f_location" value="${esc(b.location)}" placeholder="Étagère salon, rangée 2…"></label>
-      <label class="f">Notes<textarea id="f_notes">${esc(b.notes)}</textarea></label>
-      <details><summary class="small" style="cursor:pointer;padding:6px 0">Modifier les infos du livre</summary>
-        <div class="form" style="margin-top:10px">
+      <details class="fold"><summary><b>Résumé</b> <span class="muted" id="sumPrev">${sumPrev}</span></summary>
+        <textarea id="f_summary" rows="6" placeholder="Pas encore de résumé">${esc(b.summary || "")}</textarea>
+        <div class="row"><button class="btn xs" id="sFind">Chercher en ligne</button><span class="small muted" id="sMsg"></span></div></details>
+      <details class="fold"${b.notes ? " open" : ""}><summary><b>Notes</b> <span class="muted">${b.notes ? "" : "Aucune"}</span></summary><textarea id="f_notes" rows="3">${esc(b.notes)}</textarea></details>
+      <details class="fold"><summary><b>Infos du livre</b> <span class="muted">titre, auteur, série, ISBN…</span></summary>
+        <div class="form">
           <label class="f">Titre<input type="text" id="f_title" value="${esc(b.title)}"></label>
           <label class="f">Auteur(s)<input type="text" id="f_authors" value="${esc(authorsTxt(b))}"></label>
           <div class="grid2"><label class="f">Série<input type="text" id="f_series" value="${esc(b.series)}"></label><label class="f">Tome<input type="number" min="0" id="f_tome" value="${esc(b.tome)}"></label></div>
@@ -654,7 +667,7 @@ function openBook(id, isNew){
           <label class="f">URL de la couverture<input type="text" id="f_cover" value="${esc(b.cover)}" placeholder="https://…"></label>
           ${b.source ? `<div class="small muted">Source : ${esc(b.source)}</div>` : ""}
         </div></details>
-      <div class="row" style="margin-top:6px"><button class="btn danger" id="delBtn">Supprimer</button><span class="spacer"></span><button class="btn primary" id="saveBtn">Enregistrer</button></div>
+      <div class="row"><button class="btn xs danger" id="delBtn">Supprimer ce livre</button></div>
       <div id="delConfirm"></div>
     </div>`);
   const el = sh.el;
@@ -671,15 +684,15 @@ function openBook(id, isNew){
   $("#sFind", el).onclick = async () => { const m = $("#sMsg", el); m.textContent = "Recherche…"; $("#sFind", el).disabled = true;
     const tmp = { ...b, title: $("#f_title", el).value.trim() || b.title, authors: $("#f_authors", el).value.split(",").map(s => s.trim()).filter(Boolean), isbn: cleanIsbn($("#f_isbn", el).value) };
     const d = await findSummary(tmp); $("#sFind", el).disabled = false;
-    if (d) { $("#f_summary", el).value = d; m.textContent = "Trouvé. Pense à enregistrer."; } else m.textContent = "Rien trouvé en ligne. Tu peux l'écrire toi-même."; };
+    if (d) { $("#f_summary", el).value = d; $("#sumPrev", el).textContent = d.slice(0, 90) + "…"; m.textContent = "Trouvé. Pense à enregistrer."; } else m.textContent = "Rien trouvé en ligne. Tu peux l'écrire toi-même."; };
   const renderLoan = () => {
     const a = $("#loanArea", el);
     if (b.loan) a.innerHTML = `<div class="loanbox"><div><b>Prêté à ${esc(b.loan.to)}</b> depuis le ${fmtDate(b.loan.date)}${b.loan.due ? `<br><span class="${isLate(b) ? "pill bad" : "small"}">Retour prévu le ${fmtDate(b.loan.due)}</span>` : ""}</div>
-        <div class="row"><button class="btn sm primary" id="retBtn">Il me l'a rendu</button></div></div>`;
-    else a.innerHTML = `<div class="loanbox free"><div class="row"><b class="small">Prêter ce livre</b></div>
+        <div class="row"><button class="btn xs primary" id="retBtn">Il me l'a rendu</button></div></div>`;
+    else a.innerHTML = `<details class="fold"><summary><b>Prêter ce livre</b></summary>
         <div class="grid2"><label class="f">À qui ?<input type="text" id="l_to" placeholder="Nom" list="dl_people"></label><label class="f">Retour prévu<input type="date" id="l_due"></label></div>
         <datalist id="dl_people">${[...new Set(S.books.flatMap(x => [x.loan && x.loan.to, ...(x.loans || []).map(l => l.to)]).filter(Boolean))].map(p => `<option value="${esc(p)}">`).join("")}</datalist>
-        <div class="row"><span class="small muted">Date de retour facultative</span><span class="spacer"></span><button class="btn sm" id="lendBtn">Prêter</button></div></div>`;
+        <div class="row"><span class="small muted">Retour facultatif</span><span class="spacer"></span><button class="btn xs primary" id="lendBtn">Prêter</button></div></details>`;
     if ((b.loans || []).length) a.innerHTML += `<div class="small muted" style="margin-top:6px">Historique : ${b.loans.map(l => `${esc(l.to)} (${fmtDate(l.date)} → ${fmtDate(l.returnedAt)})`).join(" · ")}</div>`;
     const lb = $("#lendBtn", el); if (lb) lb.onclick = () => { const to = $("#l_to", el).value.trim(); if (!to) { $("#l_to", el).focus(); return; }
       b.loan = { to, date: today(), due: $("#l_due", el).value || "" }; renderLoan(); };
